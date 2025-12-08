@@ -42,3 +42,4 @@ fi
 echo "✅ Backend deployment completed successfully!"
 echo "📍 Check logs: pm2 logs medusa-backend"
 
+
