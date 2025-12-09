@@ -25,6 +25,7 @@ jobs:
           git pull origin main
           yarn install
           rm -rf .medusa
+          rm -rf node_modules/.vite
           yarn build
           pm2 delete medusaBackend 2>/dev/null || true
           pm2 start npx --name medusaBackend -- medusa develop
