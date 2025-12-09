@@ -5,7 +5,10 @@ loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 module.exports = defineConfig({
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
-    backend_url: process.env.MEDUSA_BACKEND_URL || process.env.BACKEND_URL || "http://localhost:9000",
+    backend_url: (() => {
+      const baseUrl = process.env.MEDUSA_BACKEND_URL || process.env.BACKEND_URL || "http://localhost:9000"
+      return baseUrl.endsWith("/static") ? baseUrl : baseUrl + "/static"
+    })(),
     http: {
       storeCors: process.env.STORE_CORS!,
       adminCors: process.env.ADMIN_CORS!,

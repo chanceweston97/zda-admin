@@ -44,13 +44,20 @@ jobs:
           corepack prepare yarn@4.6.0 --activate || true
           yarn install --immutable
           
-          # Set MEDUSA_BACKEND_URL to use the actual server IP
+          # Set MEDUSA_BACKEND_URL to use the actual server IP (with /static as per PR #8019)
           BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
           export MEDUSA_BACKEND_URL="$BACKEND_URL"
           echo "MEDUSA_BACKEND_URL=$BACKEND_URL" >> .env
           
-          # Clear build cache and rebuild
+          # Ensure static directory exists
+          mkdir -p static
+          
+          # Clear all build caches (fixes React multiple instances error)
           rm -rf .medusa
+          rm -rf node_modules/.vite
+          rm -rf node_modules/.cache
+          
+          # Rebuild admin panel
           yarn build
           
           # Create PM2 ecosystem file with environment variable
