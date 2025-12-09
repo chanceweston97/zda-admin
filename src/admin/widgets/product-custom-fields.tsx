@@ -178,7 +178,7 @@ const ProductCustomFields = () => {
       })
     }
 
-    // Run immediately and also after delay
+    // Run immediately 
     hideFields()
     setTimeout(hideFields, 1000)
     setTimeout(hideFields, 2000)
