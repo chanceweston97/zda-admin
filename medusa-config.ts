@@ -18,5 +18,11 @@ module.exports = defineConfig({
     {
       resolve: "./src/modules/cable-customizer",
     },
+    {
+      resolve: "@medusajs/file-local",
+      options: {
+        backend_url: process.env.MEDUSA_BACKEND_URL || process.env.BACKEND_URL || "http://localhost:9000",
+      },
+    },
   ],
 })
