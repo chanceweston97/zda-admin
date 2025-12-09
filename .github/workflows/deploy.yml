@@ -1,19 +1,36 @@
-name: Deploy to EC2
+name: Deploy Backend to EC2
 
 on:
   push:
-    branches: [ "main" ]  # Change if using master
+    branches: ["main"]   # deploys whenever you push to main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Connect & Deploy to EC2
-      uses: appleboy/ssh-action@v1.0.3
+    - name: Create target directory
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_KEY }}
+        script: mkdir -p ${{ secrets.APP_PATH }}
+
+    - name: Copy files to EC2
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_KEY }}
+        source: "."
+        target: ${{ secrets.APP_PATH }}
+
+    - name: SSH into server and perform deploy commands
+      uses: appleboy/ssh-action@v0.1.7
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
@@ -22,12 +39,10 @@ jobs:
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           cd ${{ secrets.APP_PATH }}
-          git pull origin main
-          yarn install
-          rm -rf .medusa
-          rm -rf node_modules/.vite
-          yarn build
-          pm2 delete medusaBackend 2>/dev/null || true
-          pm2 start npx --name medusaBackend -- medusa develop
+          git pull || true
+          corepack enable || true
+          corepack prepare yarn@4.6.0 --activate || true
+          yarn install --immutable
+          pm2 restart medusaBackend || pm2 start npx --name medusaBackend -- medusa develop 
           pm2 save
-
+          
