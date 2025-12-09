@@ -43,6 +43,28 @@ jobs:
           corepack enable || true
           corepack prepare yarn@4.6.0 --activate || true
           yarn install --immutable
-          pm2 restart medusaBackend || pm2 start npx --name medusaBackend -- medusa develop 
+          
+          # Set MEDUSA_BACKEND_URL to use the actual server IP
+          BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
+          export MEDUSA_BACKEND_URL="$BACKEND_URL"
+          echo "MEDUSA_BACKEND_URL=$BACKEND_URL" >> .env
+          
+          # Create PM2 ecosystem file with environment variable
+          cat > ecosystem.config.js << EOF
+          module.exports = {
+            apps: [{
+              name: 'medusaBackend',
+              script: 'npx',
+              args: 'medusa develop',
+              env: {
+                MEDUSA_BACKEND_URL: '$BACKEND_URL'
+              }
+            }]
+          };
+          EOF
+          
+          # Restart PM2 with the ecosystem file
+          pm2 delete medusaBackend 2>/dev/null || true
+          pm2 start ecosystem.config.js
           pm2 save
           

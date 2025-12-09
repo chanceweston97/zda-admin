@@ -222,10 +222,29 @@ const ProductCustomFields = () => {
           const productData = data.product
           setProduct(productData)
           const currentMetadata = productData?.metadata || {}
-          setMetadata(currentMetadata)
+          
+          // Fix localhost URLs in existing metadata
+          const fixedMetadata: Record<string, any> = {}
+          if (typeof window !== 'undefined') {
+            const currentOrigin = window.location.origin
+            Object.keys(currentMetadata).forEach(key => {
+              const value = currentMetadata[key]
+              if (typeof value === 'string' && value.includes('localhost:9000')) {
+                fixedMetadata[key] = value.replace(/http:\/\/localhost:9000/g, currentOrigin)
+              } else if (typeof value === 'string' && value.includes('127.0.0.1:9000')) {
+                fixedMetadata[key] = value.replace(/http:\/\/127\.0\.0\.1:9000/g, currentOrigin)
+              } else {
+                fixedMetadata[key] = value
+              }
+            })
+          } else {
+            Object.assign(fixedMetadata, currentMetadata)
+          }
+          
+          setMetadata(fixedMetadata)
           
           // Get product type from metadata or try to detect from categories
-          let detectedType = currentMetadata.productType || ""
+          let detectedType = fixedMetadata.productType || ""
           
           // If not in metadata, try to detect from categories
           if (!detectedType) {
@@ -393,6 +412,14 @@ const ProductCustomFields = () => {
         fileUrl = uploadData.data.url
       } else if (uploadData.upload && uploadData.upload.url) {
         fileUrl = uploadData.upload.url
+      }
+
+      // Fix localhost URLs to use the actual server URL
+      if (fileUrl && typeof window !== 'undefined') {
+        const currentOrigin = window.location.origin
+        // Replace localhost:9000 with the actual server origin
+        fileUrl = fileUrl.replace(/http:\/\/localhost:9000/g, currentOrigin)
+        fileUrl = fileUrl.replace(/http:\/\/127\.0\.0\.1:9000/g, currentOrigin)
       }
 
       // Log for debugging (only in development)
