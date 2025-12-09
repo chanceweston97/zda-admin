@@ -178,7 +178,7 @@ const ProductCustomFields = () => {
       })
     }
 
-    // Run immediately and also after delays to catch dynamically loaded fields
+    // Run immediately and also after delay
     hideFields()
     setTimeout(hideFields, 1000)
     setTimeout(hideFields, 2000)
