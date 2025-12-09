@@ -58,10 +58,13 @@ jobs:
           module.exports = {
             apps: [{
               name: 'medusaBackend',
-              script: 'npx',
-              args: 'medusa develop',
+              script: 'yarn',
+              args: 'dev',
+              cwd: '${{ secrets.APP_PATH }}',
               env: {
-                MEDUSA_BACKEND_URL: '$BACKEND_URL'
+                NODE_ENV: 'production',
+                MEDUSA_BACKEND_URL: '$BACKEND_URL',
+                BACKEND_URL: '$BACKEND_URL'
               }
             }]
           };
