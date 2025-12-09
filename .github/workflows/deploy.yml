@@ -49,6 +49,10 @@ jobs:
           export MEDUSA_BACKEND_URL="$BACKEND_URL"
           echo "MEDUSA_BACKEND_URL=$BACKEND_URL" >> .env
           
+          # Clear build cache and rebuild
+          rm -rf .medusa
+          yarn build
+          
           # Create PM2 ecosystem file with environment variable
           cat > ecosystem.config.js << EOF
           module.exports = {
