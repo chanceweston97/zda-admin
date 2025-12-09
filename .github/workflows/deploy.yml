@@ -21,7 +21,7 @@ jobs:
         script: |
           cd ${{ secrets.APP_PATH }}
           git pull origin main
-          npm install
-          npm run build
-          pm2 restart medusaBackend
+          yarn install
+          yarn build
+          pm2 restart medusaBackend || pm2 start yarn --name medusaBackend -- start
 
