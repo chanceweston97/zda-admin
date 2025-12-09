@@ -19,9 +19,14 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_KEY }}
         script: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           cd ${{ secrets.APP_PATH }}
           git pull origin main
           yarn install
+          rm -rf .medusa
           yarn build
-          pm2 restart medusaBackend || pm2 start yarn --name medusaBackend -- dev
+          pm2 delete medusaBackend 2>/dev/null || true
+          pm2 start npx --name medusaBackend -- medusa develop
+          pm2 save
 
