@@ -23,5 +23,5 @@ jobs:
           git pull origin main
           yarn install
           yarn build
-          pm2 restart medusaBackend || pm2 start yarn --name medusaBackend -- start
+          pm2 restart medusaBackend || pm2 start npx --name medusaBackend -- medusa develop
 
