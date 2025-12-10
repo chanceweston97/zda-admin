@@ -13139,6 +13139,7 @@ __metadata:
   dependencies:
     "@medusajs/admin-sdk": "npm:2.12.1"
     "@medusajs/cli": "npm:2.12.1"
+    "@medusajs/file-local": "npm:2.12.1"
     "@medusajs/framework": "npm:2.12.1"
     "@medusajs/medusa": "npm:2.12.1"
     "@medusajs/test-utils": "npm:2.12.1"
