@@ -229,10 +229,20 @@ const ProductCustomFields = () => {
             const currentOrigin = window.location.origin
             Object.keys(currentMetadata).forEach(key => {
               const value = currentMetadata[key]
-              if (typeof value === 'string' && value.includes('localhost:9000')) {
-                fixedMetadata[key] = value.replace(/http:\/\/localhost:9000/g, currentOrigin)
-              } else if (typeof value === 'string' && value.includes('127.0.0.1:9000')) {
-                fixedMetadata[key] = value.replace(/http:\/\/127\.0\.0\.1:9000/g, currentOrigin)
+              if (typeof value === 'string' && typeof window !== 'undefined') {
+                // Get backend URL from current origin (admin panel runs on same origin as backend)
+                const backendUrl = window.location.origin
+                
+                if (value.includes('localhost:9000')) {
+                  fixedMetadata[key] = value.replace(/http:\/\/localhost:9000/g, backendUrl)
+                } else if (value.includes('127.0.0.1:9000')) {
+                  fixedMetadata[key] = value.replace(/http:\/\/127\.0\.0\.1:9000/g, backendUrl)
+                } else if (value.startsWith('/static/') || value.startsWith('/uploads/')) {
+                  // Relative paths are already correct (relative to current origin)
+                  fixedMetadata[key] = value
+                } else {
+                  fixedMetadata[key] = value
+                }
               } else {
                 fixedMetadata[key] = value
               }
@@ -416,10 +426,20 @@ const ProductCustomFields = () => {
 
       // Fix localhost URLs to use the actual server URL
       if (fileUrl && typeof window !== 'undefined') {
+        // Get backend URL from window location (admin panel runs on same origin as backend)
+        // Admin panel typically runs on port 9000, so we can use the current origin
         const currentOrigin = window.location.origin
-        // Replace localhost:9000 with the actual server origin
-        fileUrl = fileUrl.replace(/http:\/\/localhost:9000/g, currentOrigin)
-        fileUrl = fileUrl.replace(/http:\/\/127\.0\.0\.1:9000/g, currentOrigin)
+        const backendUrl = currentOrigin // Admin panel and backend are on same origin
+        
+        // Replace localhost:9000 with the actual backend server URL
+        fileUrl = fileUrl.replace(/http:\/\/localhost:9000/g, backendUrl)
+        fileUrl = fileUrl.replace(/http:\/\/127\.0\.0\.1:9000/g, backendUrl)
+        
+        // Also handle cases where the URL might be relative
+        if (fileUrl.startsWith('/static/') || fileUrl.startsWith('/uploads/')) {
+          // If it's a relative path, it's already correct (relative to current origin)
+          // But if it came from backend with localhost, we've already replaced it above
+        }
       }
 
       // Log for debugging (only in development)
