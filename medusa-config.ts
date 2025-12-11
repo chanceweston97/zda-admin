@@ -41,24 +41,7 @@ module.exports = defineConfig({
         ],
       },
     },
-    // Register Stripe Payment Provider
-    // See: https://docs.medusajs.com/resources/commerce-modules/payment/payment-provider/stripe
-    {
-      resolve: "@medusajs/medusa/payment",
-      options: {
-        providers: [
-          {
-            resolve: "@medusajs/medusa/payment-stripe",
-            id: "stripe",
-            options: {
-              apiKey: process.env.STRIPE_API_KEY || process.env.STRIPE_SECRET_KEY,
-              webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-              capture: true, // Automatically capture payment after authorization
-              automatic_payment_methods: true, // Enable Apple Pay, Google Pay, etc.
-            },
-          },
-        ],
-      },
-    },
+    // Stripe payment provider removed - payments are handled on the frontend
+    // Frontend processes Stripe payments directly, then creates orders in Medusa
   ],
 })
