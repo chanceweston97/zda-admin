@@ -34,7 +34,6 @@ module.exports = defineConfig({
           },
         },
       },
-      
     },
     // Register File Module with backend_url option
     // This is required for file uploads to use the correct server URL
