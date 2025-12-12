@@ -1,6 +1,4 @@
 import { loadEnv, defineConfig } from '@medusajs/framework/utils'
-import manualPayment from "@medusajs/medusa/payment-manual"
-
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
@@ -24,15 +22,12 @@ module.exports = defineConfig({
   modules: [
     {
       resolve: "./src/modules/cable-customizer",
+    },
+    {
+      resolve: "@medusajs/medusa/payment",
       options: {
-        payment: {
-          manual: {
-            driver: manualPayment,
-            options: {
-              enabled: true,
-            },
-          },
-        },
+        // Manual payment (COD) is available by default in Medusa v2
+        // No additional configuration needed - it will be available as a payment provider
       },
     },
     // Register File Module with backend_url option
