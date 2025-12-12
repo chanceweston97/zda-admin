@@ -1,4 +1,6 @@
 import { loadEnv, defineConfig } from '@medusajs/framework/utils'
+import manualPayment from "@medusajs/medusa/payment-manual"
+
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
@@ -22,6 +24,17 @@ module.exports = defineConfig({
   modules: [
     {
       resolve: "./src/modules/cable-customizer",
+      options: {
+        payment: {
+          manual: {
+            driver: manualPayment,
+            options: {
+              enabled: true,
+            },
+          },
+        },
+      },
+      
     },
     // Register File Module with backend_url option
     // This is required for file uploads to use the correct server URL
