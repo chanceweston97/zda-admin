@@ -23,8 +23,11 @@ module.exports = defineConfig({
     {
       resolve: "./src/modules/cable-customizer",
     },
-    // Payment module - manual payment (COD) is available by default
-    // No explicit configuration needed for manual payment in Medusa v2
+    {
+      resolve: "@medusajs/medusa/payment",
+      // Payment module is required for checkout
+      // Manual payment (COD) is available by default
+    },
     // Register File Module with backend_url option
     // This is required for file uploads to use the correct server URL
     // See: https://docs.medusajs.com/resources/infrastructure-modules/file/local
