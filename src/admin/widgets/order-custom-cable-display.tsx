@@ -114,18 +114,24 @@ const OrderCustomCableDisplay = () => {
 
       // Calculate totals from custom cable metadata
       let itemSubtotal = 0
+      const itemPriceMap = new Map<string, number>() // Map item ID to price
+      
       customItems.forEach((item: any) => {
         const metadata = item.metadata || {}
         const price = parseFloat(metadata.unitCustomCablePriceDollars || '0')
         const quantity = item.quantity || 1
         itemSubtotal += price * quantity
+        itemPriceMap.set(item.id, price)
       })
 
       // Get other totals from order (shipping, tax, etc.) - these are in cents
       const shippingTotal = (orderData.shipping_total || 0) / 100
       const taxTotal = (orderData.tax_total || 0) / 100
       const discountTotal = (orderData.discount_total || 0) / 100
-      const orderTotal = (orderData.total || 0) / 100
+      
+      // Use calculated itemSubtotal + shipping + tax - discount for order total
+      const calculatedOrderTotal = itemSubtotal + shippingTotal + taxTotal - discountTotal
+      const orderTotal = calculatedOrderTotal > 0 ? calculatedOrderTotal : ((orderData.total || 0) / 100)
       const paidTotal = (orderData.paid_total || 0) / 100
       const outstandingAmount = orderTotal - paidTotal
 
@@ -228,7 +234,7 @@ const OrderCustomCableDisplay = () => {
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 16px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
               <span style="color: #111827; font-weight: 600; font-size: 16px;">Order Total</span>
-              <span style="color: #111827; font-weight: 600; font-size: 16px;">${formatPrice(orderTotal)}</span>
+              <span style="color: #111827; font-weight: 600; font-size: 16px;">${formatPrice(itemSubtotal + shippingTotal + taxTotal - discountTotal)}</span>
             </div>
             ${discountTotal > 0 ? `
               <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -253,10 +259,148 @@ const OrderCustomCableDisplay = () => {
       `
     }
 
+    // Update Unfulfilled Items section prices
+    const updateUnfulfilledItems = () => {
+      // Find "Unfulfilled Items" section by heading text
+      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div[class*="Heading"]'))
+      let unfulfilledSection: HTMLElement | null = null
+      
+      for (const heading of headings) {
+        const text = heading.textContent?.trim().toLowerCase() || ''
+        if (text.includes('unfulfilled') || text.includes('fulfillment')) {
+          // Walk up to find the container section
+          let container = heading.closest('div[class*="flex"], div[class*="grid"], section, div') as HTMLElement
+          if (container) {
+            unfulfilledSection = container
+            break
+          }
+        }
+      }
+
+      if (!unfulfilledSection) return
+
+      // Create a map of item IDs to correct prices
+      const priceMap = new Map<string, number>()
+      customItems.forEach((item: any) => {
+        const metadata = item.metadata || {}
+        const price = parseFloat(metadata.unitCustomCablePriceDollars || '0')
+        if (price > 0) {
+          priceMap.set(item.id, price)
+        }
+      })
+
+      // Find all price elements in the unfulfilled section that show $0.00
+      const formatPrice = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 2,
+        }).format(amount)
+      }
+
+      // Look for elements containing "Custom Cable" and nearby price elements
+      const allTextElements = unfulfilledSection.querySelectorAll('span, div, p, td')
+      allTextElements.forEach((el) => {
+        const text = el.textContent || ''
+        // If element contains "Custom Cable" or looks like an item row
+        if (text.includes('Custom Cable') || text.includes('Default option value')) {
+          // Find the parent row/container
+          const row = el.closest('tr, div[class*="flex"], div[class*="grid"], div') as HTMLElement
+          if (row) {
+            // Look for price elements in this row (usually $0.00)
+            const priceElements = row.querySelectorAll('span, div, p, td')
+            priceElements.forEach((priceEl) => {
+              const priceText = priceEl.textContent || ''
+              // Check if it's a $0.00 price that needs updating
+              if (/\$0\.00/.test(priceText) && priceMap.size > 0) {
+                // Use the first price from our map (or calculate average if multiple items)
+                const correctPrice = Array.from(priceMap.values())[0]
+                priceEl.textContent = formatPrice(correctPrice)
+                priceEl.setAttribute('data-custom-price-updated', 'true')
+                priceEl.setAttribute('style', 'color: inherit; font-weight: inherit;')
+              }
+            })
+          }
+        }
+      })
+    }
+
+    // Update Activity section
+    const updateActivitySection = () => {
+      // Find "Activity" section by heading
+      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div[class*="Heading"]'))
+      let activitySection: HTMLElement | null = null
+      
+      for (const heading of headings) {
+        if (heading.textContent?.trim().toLowerCase() === 'activity') {
+          const container = heading.closest('div, section') as HTMLElement
+          if (container) {
+            activitySection = container
+            break
+          }
+        }
+      }
+
+      if (!activitySection) return
+
+      // Calculate correct order total
+      let totalAmount = 0
+      customItems.forEach((item: any) => {
+        const metadata = item.metadata || {}
+        const price = parseFloat(metadata.unitCustomCablePriceDollars || '0')
+        const quantity = item.quantity || 1
+        totalAmount += price * quantity
+      })
+
+      const shippingTotal = (orderData.shipping_total || 0) / 100
+      const taxTotal = (orderData.tax_total || 0) / 100
+      const discountTotal = (orderData.discount_total || 0) / 100
+      const finalTotal = totalAmount + shippingTotal + taxTotal - discountTotal
+
+      const formatPrice = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 2,
+        }).format(amount)
+      }
+
+      // Find and update "Order placed" activity price
+      const allElements = activitySection.querySelectorAll('*')
+      allElements.forEach((el) => {
+        const text = el.textContent || ''
+        // Look for "Order placed" text
+        if (text.includes('Order placed')) {
+          // Find price nearby (usually in the same or sibling element)
+          const pricePattern = /\$[\d,]+\.?\d*\s*USD/
+          if (pricePattern.test(text)) {
+            // Update the price in this element's text
+            const updatedText = text.replace(pricePattern, `${formatPrice(finalTotal)} USD`)
+            if (el.textContent !== updatedText) {
+              el.textContent = updatedText
+              el.setAttribute('data-custom-price-updated', 'true')
+            }
+          } else {
+            // Price might be in a child or sibling element
+            const children = el.querySelectorAll('span, div, p')
+            children.forEach((child) => {
+              const childText = child.textContent || ''
+              if (pricePattern.test(childText) && childText.includes('$0')) {
+                child.textContent = childText.replace(pricePattern, `${formatPrice(finalTotal)} USD`)
+                child.setAttribute('data-custom-price-updated', 'true')
+              }
+            })
+          }
+        }
+      })
+    }
+
     // Run after a short delay to ensure DOM is ready
     const timer = setTimeout(() => {
       hideDefaultSummary()
       createCustomSummary()
+      updateUnfulfilledItems()
+      updateActivitySection()
     }, 500)
 
     return () => {
