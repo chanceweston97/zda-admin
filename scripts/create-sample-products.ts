@@ -22,12 +22,10 @@ async function createSampleProducts() {
   try {
     console.log("🚀 Creating sample products...")
 
-  const headers = {
-    Authorization: `Bearer ${MEDUSA_ADMIN_API_KEY}`,
-    "Content-Type": "application/json",
-  }
-
-  try {
+    const headers = {
+      Authorization: `Bearer ${MEDUSA_ADMIN_API_KEY}`,
+      "Content-Type": "application/json",
+    }
     // First, get or create categories
     console.log("📁 Setting up categories...")
     
@@ -292,5 +290,8 @@ async function createSampleProducts() {
 }
 
 // Run the script
-createSampleProducts()
+createSampleProducts().catch((error) => {
+  console.error("❌ Unhandled error:", error)
+  process.exit(1)
+})
 
