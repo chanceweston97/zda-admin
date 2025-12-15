@@ -24,14 +24,44 @@ const formatOrderEmail = (order: any) => {
 
   const itemsHtml = order.items
     ?.map((item: any) => {
-      const title = item.title || item.product?.title || "Product";
+      const metadata = item.metadata || {};
+      const isCustomCable = metadata.isCustomCable || metadata.customTitle;
+      
+      // Use custom title and price if available, otherwise use default
+      let title = item.title || item.product?.title || "Product";
+      let unitPrice = item.unit_price || 0;
+      
+      // Override with custom cable details if available
+      if (isCustomCable && metadata.customTitle) {
+        title = metadata.customTitle;
+      }
+      if (isCustomCable && metadata.unitCustomCablePriceDollars) {
+        // Convert dollars back to cents
+        unitPrice = parseFloat(metadata.unitCustomCablePriceDollars) * 100;
+      }
+      
       const quantity = item.quantity || 1;
-      const unitPrice = item.unit_price || 0;
       const totalPrice = unitPrice * quantity;
+      
+      // Build custom cable details HTML if this is a custom cable
+      let customDetailsHtml = "";
+      if (isCustomCable) {
+        customDetailsHtml = `
+          <div style="margin-top: 8px; padding: 8px; background-color: #f0f9ff; border-left: 3px solid #0ea5e9; font-size: 12px;">
+            <div style="font-weight: 600; color: #0c4a6e; margin-bottom: 4px;">📦 Custom Cable Details</div>
+            ${metadata.customDescription ? `<div style="color: #64748b; margin-bottom: 4px;">${metadata.customDescription}</div>` : ""}
+            ${metadata.summary ? `<div style="color: #475569; margin-top: 4px;"><strong>Summary:</strong> ${metadata.summary}</div>` : ""}
+            ${metadata.customCableCount ? `<div style="color: #475569; margin-top: 4px;"><strong>Number of Cables:</strong> ${metadata.customCableCount}</div>` : ""}
+          </div>
+        `;
+      }
       
       return `
         <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #eee;">${title}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee;">
+            ${title}
+            ${customDetailsHtml}
+          </td>
           <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${quantity}</td>
           <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrency(unitPrice)}</td>
           <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrency(totalPrice)}</td>
@@ -71,6 +101,23 @@ const formatOrderEmail = (order: any) => {
   const paymentStatus = order.payment_status || "pending";
   const paymentStatusColor = paymentStatus === "captured" ? "#28a745" : paymentStatus === "awaiting" ? "#ffc107" : "#dc3545";
 
+  // Check if order has custom cables
+  const hasCustomCables = order.items?.some((item: any) => 
+    item.metadata?.isCustomCable || item.metadata?.customTitle
+  ) || false;
+  
+  const orderMetadata = order.metadata || {};
+  const customCableSummary = hasCustomCables && orderMetadata.customCableSummary
+    ? `
+      <div style="background-color: #fef3c7; padding: 15px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #f59e0b;">
+        <h3 style="color: #92400e; margin-top: 0;">📦 Custom Cable Order</h3>
+        <p style="color: #78350f; margin: 5px 0;"><strong>Note:</strong> This order contains custom cables. Please review the detailed specifications in the order items above.</p>
+        ${orderMetadata.customCableSummary ? `<p style="color: #78350f; margin: 5px 0;"><strong>Summary:</strong> ${orderMetadata.customCableSummary}</p>` : ""}
+        ${orderMetadata.totalCustomCablePrice ? `<p style="color: #78350f; margin: 5px 0;"><strong>Custom Cable Total:</strong> ${formatCurrency(orderMetadata.totalCustomCablePrice * 100)}</p>` : ""}
+      </div>
+    `
+    : "";
+
   return `
     <!DOCTYPE html>
     <html>
@@ -97,7 +144,10 @@ const formatOrderEmail = (order: any) => {
             <span style="color: ${paymentStatusColor}; font-weight: bold; text-transform: uppercase;">${paymentStatus}</span>
           </p>
           <p style="margin: 5px 0;"><strong>Total Amount:</strong> ${formatCurrency(order.total || 0)}</p>
+          ${hasCustomCables ? '<p style="margin: 5px 0; color: #f59e0b; font-weight: bold;">📦 This order contains custom cables</p>' : ''}
         </div>
+
+        ${customCableSummary}
 
         <h3 style="color: #2958A4;">Order Items</h3>
         <table style="width: 100%; border-collapse: collapse; background-color: white; margin-bottom: 20px;">
@@ -171,16 +221,28 @@ export default async function orderCreatedHandler({
     console.log(`📦 Order email: ${order.email || "N/A"}`);
     console.log(`📦 Order total: ${order.total || 0}`);
 
-    // Get admin email from environment
-    const adminEmail = process.env.ADMIN_EMAIL;
+    // Get admin emails from environment (supports comma-separated list)
+    const adminEmailsEnv = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL;
     
-    if (!adminEmail) {
-      console.warn("⚠️ ADMIN_EMAIL not configured. Skipping email notification.");
-      console.warn("⚠️ Please set ADMIN_EMAIL environment variable in your .env file");
+    if (!adminEmailsEnv) {
+      console.warn("⚠️ ADMIN_EMAILS not configured. Skipping email notification.");
+      console.warn("⚠️ Please set ADMIN_EMAILS environment variable in your .env file");
+      console.warn("⚠️ You can specify multiple emails separated by commas: ADMIN_EMAILS=admin1@example.com,admin2@example.com");
       return;
     }
 
-    console.log(`📧 Preparing to send email to admin: ${adminEmail}`);
+    // Parse admin emails (support comma-separated list)
+    const adminEmails = adminEmailsEnv
+      .split(",")
+      .map(email => email.trim())
+      .filter(email => email.length > 0);
+
+    if (adminEmails.length === 0) {
+      console.warn("⚠️ No valid admin emails found. Skipping email notification.");
+      return;
+    }
+
+    console.log(`📧 Preparing to send email to ${adminEmails.length} admin(s):`, adminEmails);
 
     // Check email configuration
     const emailConfig = {
@@ -202,18 +264,18 @@ export default async function orderCreatedHandler({
       return;
     }
 
-    // Send email to admin
+    // Send email to all admin emails
     const emailHtml = formatOrderEmail(order);
     
     console.log("📧 Sending email...");
     await sendEmail({
-      to: adminEmail,
+      to: adminEmails,
       subject: `New Order Received - Order #${order.display_id || order.id}`,
       html: emailHtml,
       replyTo: order.email || undefined,
     });
 
-    console.log(`✅ Order notification email sent successfully to admin: ${adminEmail}`);
+    console.log(`✅ Order notification email sent successfully to ${adminEmails.length} admin(s):`, adminEmails);
   } catch (error: any) {
     console.error("❌ Error in order created subscriber:", error);
     console.error("❌ Error details:", {
