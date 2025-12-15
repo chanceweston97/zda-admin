@@ -57,16 +57,16 @@ jobs:
           rm -rf node_modules/.vite
           rm -rf node_modules/.cache
           
-          # Rebuild admin panel
-          yarn build
+          # Rebuild admin panel (this builds both backend and admin)
+          npx medusa build
           
           # Create PM2 ecosystem file with environment variable
           cat > ecosystem.config.js << EOF
           module.exports = {
             apps: [{
               name: 'medusaBackend',
-              script: 'yarn',
-              args: 'dev',
+              script: 'npm',
+              args: 'start',
               cwd: '${{ secrets.APP_PATH }}',
               env: {
                 NODE_ENV: 'production',
