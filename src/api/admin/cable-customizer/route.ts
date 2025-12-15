@@ -44,7 +44,7 @@ export async function POST(
       CABLE_CUSTOMIZER_MODULE
     )
 
-    const { type, data } = req.body
+    const { type, data } = req.body as { type: string; data: any }
 
     let result
     switch (type) {
@@ -58,7 +58,8 @@ export async function POST(
         result = await cableCustomizerService.createConnector(data)
         break
       default:
-        return res.status(400).json({ message: "Invalid type" })
+        res.status(400).json({ message: "Invalid type" })
+        return
     }
 
     res.json(result)

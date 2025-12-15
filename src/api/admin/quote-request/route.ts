@@ -6,7 +6,16 @@ export async function POST(
   res: MedusaResponse
 ): Promise<void> {
   try {
-    const { firstName, lastName, email, phone, productOrService, company, message, isContactForm } = req.body
+    const { firstName, lastName, email, phone, productOrService, company, message, isContactForm } = req.body as {
+      firstName: string
+      lastName: string
+      email: string
+      phone: string
+      productOrService?: string
+      company: string
+      message?: string
+      isContactForm?: boolean
+    }
 
     // Validate required fields
     if (!firstName || !lastName || !email || !phone || !company) {
@@ -106,7 +115,7 @@ export async function POST(
     })
 
     // Check if email was accepted
-    if (emailResult.accepted && emailResult.accepted.length > 0) {
+    if (emailResult && emailResult.accepted && emailResult.accepted.length > 0) {
       console.log("✅ Email sent successfully:", {
         messageId: emailResult.messageId,
         accepted: emailResult.accepted,
@@ -117,13 +126,13 @@ export async function POST(
       })
     } else {
       console.error("❌ Email was not accepted:", {
-        rejected: emailResult.rejected || [],
-        response: emailResult.response,
+        rejected: emailResult?.rejected || [],
+        response: emailResult?.response,
       })
       res.status(500).json({
         message: "Email was not accepted by the server",
         sent: false,
-        error: emailResult.rejected?.join(", ") || "Unknown error",
+        error: emailResult?.rejected?.join(", ") || "Unknown error",
       })
     }
   } catch (error: any) {

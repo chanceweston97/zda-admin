@@ -298,29 +298,42 @@ const OrderCustomCableDisplay = () => {
         }).format(amount)
       }
 
-      // Look for elements containing "Custom Cable" and nearby price elements
-      const allTextElements = unfulfilledSection.querySelectorAll('span, div, p, td')
-      allTextElements.forEach((el) => {
-        const text = el.textContent || ''
-        // If element contains "Custom Cable" or looks like an item row
-        if (text.includes('Custom Cable') || text.includes('Default option value')) {
-          // Find the parent row/container
-          const row = el.closest('tr, div[class*="flex"], div[class*="grid"], div') as HTMLElement
-          if (row) {
-            // Look for price elements in this row (usually $0.00)
-            const priceElements = row.querySelectorAll('span, div, p, td')
-            priceElements.forEach((priceEl) => {
-              const priceText = priceEl.textContent || ''
-              // Check if it's a $0.00 price that needs updating
-              if (/\$0\.00/.test(priceText) && priceMap.size > 0) {
-                // Use the first price from our map (or calculate average if multiple items)
-                const correctPrice = Array.from(priceMap.values())[0]
-                priceEl.textContent = formatPrice(correctPrice)
-                priceEl.setAttribute('data-custom-price-updated', 'true')
-                priceEl.setAttribute('style', 'color: inherit; font-weight: inherit;')
-              }
-            })
+      // More aggressive search: look for any $0.00 prices near "Custom Cable" text
+      // Strategy: Find all text nodes and update prices in the same container
+      const walkNodes = (node: Node, callback: (node: Node) => void) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          callback(node)
+        } else {
+          for (let child = node.firstChild; child; child = child.nextSibling) {
+            walkNodes(child, callback)
           }
+        }
+      }
+
+      // Find all $0.00 prices and update them if they're in a container with "Custom Cable"
+      const allElements = unfulfilledSection.querySelectorAll('*')
+      allElements.forEach((el) => {
+        const text = el.textContent || ''
+        // Check if this element or its parent contains "Custom Cable"
+        const hasCustomCable = text.includes('Custom Cable') || 
+                              el.closest('[class*="item"], [class*="product"], tr, div')?.textContent?.includes('Custom Cable')
+        
+        if (hasCustomCable || /\$0\.00/.test(text)) {
+          // Look for $0.00 pattern in text nodes
+          walkNodes(el, (textNode) => {
+            if (textNode.textContent && /\$0\.00/.test(textNode.textContent) && priceMap.size > 0) {
+              const correctPrice = Array.from(priceMap.values())[0]
+              const formattedPrice = formatPrice(correctPrice)
+              // Only update if it's exactly $0.00 (not part of a larger string like "$0.00 USD")
+              if (textNode.textContent.trim() === '$0.00' || textNode.textContent.includes('$0.00')) {
+                textNode.textContent = textNode.textContent.replace(/\$0\.00/g, formattedPrice)
+                // Mark parent element
+                if (textNode.parentElement) {
+                  textNode.parentElement.setAttribute('data-custom-price-updated', 'true')
+                }
+              }
+            }
+          })
         }
       })
     }
@@ -395,16 +408,36 @@ const OrderCustomCableDisplay = () => {
       })
     }
 
-    // Run after a short delay to ensure DOM is ready
+    // Use MutationObserver to watch for DOM changes and update prices
+    const observer = new MutationObserver(() => {
+      updateUnfulfilledItems()
+      updateActivitySection()
+    })
+
+    // Start observing the document for changes
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    })
+
+    // Run initial updates after a delay to ensure DOM is ready
     const timer = setTimeout(() => {
       hideDefaultSummary()
       createCustomSummary()
       updateUnfulfilledItems()
       updateActivitySection()
+      
+      // Run updates again after a longer delay to catch late-loading content
+      setTimeout(() => {
+        updateUnfulfilledItems()
+        updateActivitySection()
+      }, 1500)
     }, 500)
 
     return () => {
       clearTimeout(timer)
+      observer.disconnect()
       // Cleanup: show default summary again and remove custom one
       const hiddenSummary = document.querySelector('[data-hidden-by-custom-cable="true"]')
       if (hiddenSummary) {
