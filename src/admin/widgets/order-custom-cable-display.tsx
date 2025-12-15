@@ -101,10 +101,112 @@ const OrderCustomCableDisplay = () => {
           content: "📦 ";
           margin-right: 4px;
         }
+        
+        /* Custom cable price in Summary section - white text */
+        [data-custom-cable-price="true"] {
+          color: white !important;
+          font-weight: 600;
+        }
       `
       document.head.appendChild(styleElement)
     }
   }, [])
+
+  // Inject custom cable details into Summary section
+  useEffect(() => {
+    if (customItems.length === 0) return
+
+    const updateSummarySection = () => {
+      // Find all table rows in the Summary section
+      // Look for rows containing "Custom Cable" or "Custom Product"
+      const allRows = document.querySelectorAll('table tbody tr, [role="row"]')
+      
+      allRows.forEach((row) => {
+        const rowText = row.textContent || ''
+        
+        // Check if this row contains a custom cable item
+        const matchingItem = customItems.find((item: any) => {
+          const metadata = item.metadata || {}
+          const variantTitle = item.variant?.title || ''
+          const productTitle = item.variant?.product?.title || ''
+          
+          // Match if row contains default product name or variant title
+          return rowText.includes("Custom Product") || 
+                 rowText.includes("Custom Cable") ||
+                 rowText.includes(variantTitle) ||
+                 (productTitle === "Custom Product" && rowText.includes(productTitle))
+        })
+
+        if (matchingItem) {
+          const metadata = matchingItem.metadata || {}
+          
+          // Check if we've already updated this row
+          if (row.getAttribute('data-custom-cable-updated') === 'true') {
+            return
+          }
+
+          // Find the product name cell (usually first cell)
+          const firstCell = row.querySelector('td:first-child, [class*="cell"]:first-child')
+          if (firstCell && metadata.customTitle) {
+            // Replace the product name with custom title
+            const titleElement = firstCell.querySelector('span, div, p') || firstCell
+            if (titleElement) {
+              titleElement.textContent = metadata.customTitle
+              // Also add description if available
+              if (metadata.customDescription) {
+                const descElement = document.createElement('div')
+                descElement.style.cssText = 'font-size: 12px; color: #64748b; margin-top: 4px;'
+                descElement.textContent = metadata.customDescription
+                titleElement.appendChild(descElement)
+              }
+            }
+          }
+
+          // Find and update price cells (look for cells with $0.00 or price format)
+          const priceCells = row.querySelectorAll('td')
+          priceCells.forEach((cell) => {
+            const cellText = cell.textContent || ''
+            // Check if this cell contains a price (format: $X.XX)
+            if (cellText.match(/\$[\d,]+\.\d{2}/) && metadata.unitCustomCablePriceDollars) {
+              const priceValue = parseFloat(metadata.unitCustomCablePriceDollars)
+              if (priceValue > 0) {
+                // Update price with custom price
+                const formattedPrice = `$${priceValue.toFixed(2)}`
+                cell.textContent = formattedPrice
+                cell.setAttribute('data-custom-cable-price', 'true')
+                // Make text white
+                cell.style.color = 'white'
+                cell.style.fontWeight = '600'
+              }
+            }
+          })
+
+          // Mark row as updated
+          row.setAttribute('data-custom-cable-updated', 'true')
+          row.setAttribute('data-custom-cable-item', 'true')
+        }
+      })
+    }
+
+    // Run immediately and then watch for DOM changes
+    setTimeout(updateSummarySection, 500)
+    setTimeout(updateSummarySection, 1500)
+    setTimeout(updateSummarySection, 3000)
+
+    // Watch for DOM changes (order page loads dynamically)
+    const observer = new MutationObserver(() => {
+      updateSummarySection()
+    })
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    })
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [customItems])
 
   // Also render a summary widget if we're on an order page
   if (!orderId || customItems.length === 0) {
@@ -136,7 +238,7 @@ const OrderCustomCableDisplay = () => {
                 {metadata.customTitle || item.variant?.title || "Custom Cable"}
               </Text>
               {metadata.unitCustomCablePriceDollars && (
-                <Badge style={{ marginLeft: '8px', background: '#059669' }}>
+                <Badge style={{ marginLeft: '8px', background: '#059669', color: 'white' }}>
                   ${metadata.unitCustomCablePriceDollars}
                 </Badge>
               )}
