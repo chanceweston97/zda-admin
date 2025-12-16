@@ -43,13 +43,26 @@ rm -rf node_modules/.cache
 
 # Build admin panel
 echo "Building admin panel (this may take 3-5 minutes)..."
-NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
+export NODE_ENV=production
+NODE_OPTIONS="--max-old-space-size=4096" yarn build
+
+# Medusa v2 builds to .medusa/client/ but medusa start expects .medusa/admin/
+# Copy client build to admin location
+if [ -f ".medusa/client/index.html" ]; then
+  echo "✓ Admin build found at .medusa/client/index.html"
+  echo "Copying to .medusa/admin/ for medusa start..."
+  mkdir -p .medusa/admin
+  cp -r .medusa/client/* .medusa/admin/
+else
+  echo "ERROR: Build failed - .medusa/client/index.html not found!"
+  echo "Checking what was created:"
+  find .medusa -type f -name "*.html" 2>/dev/null || echo "No HTML files found"
+  exit 1
+fi
 
 # Verify build was successful
 if [ ! -f ".medusa/admin/index.html" ]; then
-  echo "ERROR: Build failed - index.html not found!"
-  echo "Checking what was created:"
-  ls -la .medusa/ 2>/dev/null || echo ".medusa directory doesn't exist"
+  echo "ERROR: Verification failed - .medusa/admin/index.html not found!"
   exit 1
 fi
 
