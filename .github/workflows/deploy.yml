@@ -123,7 +123,30 @@ jobs:
           corepack prepare yarn@4.6.0 --activate
 
           yarn install --immutable
+          
+          # Set MEDUSA_BACKEND_URL to use the actual server IP
+          BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
+          export MEDUSA_BACKEND_URL="$BACKEND_URL"
+          echo "MEDUSA_BACKEND_URL=$BACKEND_URL" >> .env
+          
+          # Ensure static directory exists
+          mkdir -p static
+          
+          # Clear all build caches (fixes React multiple instances error)
+          rm -rf .medusa
+          rm -rf node_modules/.vite
+          rm -rf node_modules/.cache
+          
+          # Rebuild admin panel (this builds both backend and admin)
           npx medusa build
+          
+          # Verify build was successful
+          if [ ! -f ".medusa/admin/index.html" ]; then
+            echo "ERROR: Admin build failed - index.html not found"
+            exit 1
+          fi
+          
+          echo "Build successful - index.html found at .medusa/admin/index.html"
 
           pm2 delete medusaBackend || true
           pm2 start yarn --name medusaBackend -- start
