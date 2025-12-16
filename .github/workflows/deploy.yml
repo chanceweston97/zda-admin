@@ -140,14 +140,34 @@ jobs:
           # Rebuild admin panel (this builds both backend and admin)
           # Use increased memory to prevent OOM errors during build
           echo "Starting admin build (this may take 3-5 minutes)..."
+          export NODE_ENV=production
           NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
+          
+          # Debug: Show what was actually built
+          echo "Checking build output..."
+          find .medusa -type f -name "*.html" 2>/dev/null | head -10 || echo "No HTML files found"
+          
+          # In Medusa v2, admin builds to .medusa/client/ but medusa start looks for .medusa/admin/
+          # Create admin directory and copy/link client build to admin location
+          if [ -f ".medusa/client/index.html" ]; then
+            echo "✓ Found admin build at .medusa/client/index.html"
+            echo "Creating .medusa/admin/ directory and copying client build..."
+            mkdir -p .medusa/admin
+            cp -r .medusa/client/* .medusa/admin/
+            echo "✓ Admin build copied to .medusa/admin/"
+          elif [ -f ".medusa/admin/index.html" ]; then
+            echo "✓ Found admin build at .medusa/admin/index.html"
+          else
+            echo "ERROR: Admin build failed - index.html not found"
+            echo "Checking .medusa structure:"
+            ls -la .medusa/ 2>/dev/null || echo ".medusa directory doesn't exist"
+            find .medusa -type f 2>/dev/null | head -20
+            exit 1
+          fi
           
           # Verify build was successful
           if [ ! -f ".medusa/admin/index.html" ]; then
-            echo "ERROR: Admin build failed - index.html not found"
-            echo "Checking build directory contents:"
-            ls -la .medusa/ 2>/dev/null || echo ".medusa directory doesn't exist"
-            ls -la .medusa/admin/ 2>/dev/null || echo ".medusa/admin directory doesn't exist"
+            echo "ERROR: Admin build verification failed"
             exit 1
           fi
           
