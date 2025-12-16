@@ -1,92 +1,8 @@
-# name: Deploy Backend to EC2
-
-# on:
-#   push:
-#     branches: ["main"]   # deploys whenever you push to main
-
-# jobs:
-#   deploy:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#     - name: Checkout code
-#       uses: actions/checkout@v3
-
-#     - name: Create target directory
-#       uses: appleboy/ssh-action@v0.1.7
-#       with:
-#         host: ${{ secrets.EC2_HOST }}
-#         username: ${{ secrets.EC2_USER }}
-#         key: ${{ secrets.EC2_KEY }}
-#         script: mkdir -p ${{ secrets.APP_PATH }}
-
-#     - name: Copy files to EC2
-#       uses: appleboy/scp-action@v0.1.4
-#       with:
-#         host: ${{ secrets.EC2_HOST }}
-#         username: ${{ secrets.EC2_USER }}
-#         key: ${{ secrets.EC2_KEY }}
-#         source: "."
-#         target: ${{ secrets.APP_PATH }}
-
-#     - name: SSH into server and perform deploy commands
-#       uses: appleboy/ssh-action@v0.1.7
-#       with:
-#         host: ${{ secrets.EC2_HOST }}
-#         username: ${{ secrets.EC2_USER }}
-#         key: ${{ secrets.EC2_KEY }}
-#         script: |
-#           export NVM_DIR="$HOME/.nvm"
-#           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-#           cd ${{ secrets.APP_PATH }}
-#           git pull || true
-#           corepack enable || true
-#           corepack prepare yarn@4.6.0 --activate || true
-#           yarn install --immutable
-          
-#           # Set MEDUSA_BACKEND_URL to use the actual server IP (with /static as per PR #8019)
-#           BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
-#           export MEDUSA_BACKEND_URL="$BACKEND_URL"
-#           echo "MEDUSA_BACKEND_URL=$BACKEND_URL" >> .env
-          
-#           # Ensure static directory exists
-#           mkdir -p static
-          
-#           # Clear all build caches (fixes React multiple instances error)
-#           rm -rf .medusa
-#           rm -rf node_modules/.vite
-#           rm -rf node_modules/.cache
-          
-#           # Rebuild admin panel (this builds both backend and admin)
-#           npx medusa build
-          
-#           # Create PM2 ecosystem file with environment variable
-#           cat > ecosystem.config.js << EOF
-#           module.exports = {
-#             apps: [{
-#               name: 'medusaBackend',
-#               script: 'npm',
-#               args: 'start',
-#               cwd: '${{ secrets.APP_PATH }}',
-#               env: {
-#                 NODE_ENV: 'production',
-#                 MEDUSA_BACKEND_URL: '$BACKEND_URL',
-#                 BACKEND_URL: '$BACKEND_URL'
-#               }
-#             }]
-#           };
-#           EOF
-          
-#           # Restart PM2 with the ecosystem file
-#           pm2 delete medusaBackend 2>/dev/null || true
-#           pm2 start ecosystem.config.js
-#           pm2 save
-          
 name: Deploy Backend to EC2
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main"]   # deploys whenever you push to main
 
 jobs:
   deploy:
@@ -96,7 +12,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Upload project to EC2
+    - name: Create target directory
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_KEY }}
+        script: mkdir -p ${{ secrets.APP_PATH }}
+
+    - name: Copy files to EC2
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ secrets.EC2_HOST }}
@@ -105,26 +29,22 @@ jobs:
         source: "."
         target: ${{ secrets.APP_PATH }}
 
-    - name: Build and run on EC2
+    - name: SSH into server and perform deploy commands
       uses: appleboy/ssh-action@v0.1.7
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_KEY }}
         script: |
-          set -e
-
-          cd ${{ secrets.APP_PATH }}
-
           export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-          corepack enable
-          corepack prepare yarn@4.6.0 --activate
-
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          cd ${{ secrets.APP_PATH }}
+          git pull || true
+          corepack enable || true
+          corepack prepare yarn@4.6.0 --activate || true
           yarn install --immutable
           
-          # Set MEDUSA_BACKEND_URL to use the actual server IP
+          # Set MEDUSA_BACKEND_URL to use the actual server IP (with /static as per PR #8019)
           BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
           export MEDUSA_BACKEND_URL="$BACKEND_URL"
           echo "MEDUSA_BACKEND_URL=$BACKEND_URL" >> .env
@@ -138,42 +58,122 @@ jobs:
           rm -rf node_modules/.cache
           
           # Rebuild admin panel (this builds both backend and admin)
-          # Use increased memory to prevent OOM errors during build
-          echo "Starting admin build (this may take 3-5 minutes)..."
-          export NODE_ENV=production
-          NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
+          npx medusa build
           
-          # Debug: Show what was actually built
-          echo "Checking build output..."
-          find .medusa -type f -name "*.html" 2>/dev/null | head -10 || echo "No HTML files found"
+          # Create PM2 ecosystem file with environment variable
+          cat > ecosystem.config.js << EOF
+          module.exports = {
+            apps: [{
+              name: 'medusaBackend',
+              script: 'npm',
+              args: 'start',
+              cwd: '${{ secrets.APP_PATH }}',
+              env: {
+                NODE_ENV: 'production',
+                MEDUSA_BACKEND_URL: '$BACKEND_URL',
+                BACKEND_URL: '$BACKEND_URL'
+              }
+            }]
+          };
+          EOF
           
-          # In Medusa v2, admin builds to .medusa/client/ but medusa start looks for .medusa/admin/
-          # Create admin directory and copy/link client build to admin location
-          if [ -f ".medusa/client/index.html" ]; then
-            echo "✓ Found admin build at .medusa/client/index.html"
-            echo "Creating .medusa/admin/ directory and copying client build..."
-            mkdir -p .medusa/admin
-            cp -r .medusa/client/* .medusa/admin/
-            echo "✓ Admin build copied to .medusa/admin/"
-          elif [ -f ".medusa/admin/index.html" ]; then
-            echo "✓ Found admin build at .medusa/admin/index.html"
-          else
-            echo "ERROR: Admin build failed - index.html not found"
-            echo "Checking .medusa structure:"
-            ls -la .medusa/ 2>/dev/null || echo ".medusa directory doesn't exist"
-            find .medusa -type f 2>/dev/null | head -20
-            exit 1
-          fi
-          
-          # Verify build was successful
-          if [ ! -f ".medusa/admin/index.html" ]; then
-            echo "ERROR: Admin build verification failed"
-            exit 1
-          fi
-          
-          echo "✓ Build successful! index.html found at .medusa/admin/index.html"
-          ls -lh .medusa/admin/index.html
-
-          pm2 delete medusaBackend || true
-          pm2 start yarn --name medusaBackend -- start
+          # Restart PM2 with the ecosystem file
+          pm2 delete medusaBackend 2>/dev/null || true
+          pm2 start ecosystem.config.js
           pm2 save
+          
+# name: Deploy Backend to EC2
+
+# on:
+#   push:
+#     branches: ["main"]
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#     - name: Checkout code
+#       uses: actions/checkout@v3
+
+#     - name: Upload project to EC2
+#       uses: appleboy/scp-action@v0.1.4
+#       with:
+#         host: ${{ secrets.EC2_HOST }}
+#         username: ${{ secrets.EC2_USER }}
+#         key: ${{ secrets.EC2_KEY }}
+#         source: "."
+#         target: ${{ secrets.APP_PATH }}
+
+#     - name: Build and run on EC2
+#       uses: appleboy/ssh-action@v0.1.7
+#       with:
+#         host: ${{ secrets.EC2_HOST }}
+#         username: ${{ secrets.EC2_USER }}
+#         key: ${{ secrets.EC2_KEY }}
+#         script: |
+#           set -e
+
+#           cd ${{ secrets.APP_PATH }}
+
+#           export NVM_DIR="$HOME/.nvm"
+#           [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+#           corepack enable
+#           corepack prepare yarn@4.6.0 --activate
+
+#           yarn install --immutable
+          
+#           # Set MEDUSA_BACKEND_URL to use the actual server IP
+#           BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
+#           export MEDUSA_BACKEND_URL="$BACKEND_URL"
+#           echo "MEDUSA_BACKEND_URL=$BACKEND_URL" >> .env
+          
+#           # Ensure static directory exists
+#           mkdir -p static
+          
+#           # Clear all build caches (fixes React multiple instances error)
+#           rm -rf .medusa
+#           rm -rf node_modules/.vite
+#           rm -rf node_modules/.cache
+          
+#           # Rebuild admin panel (this builds both backend and admin)
+#           # Use increased memory to prevent OOM errors during build
+#           echo "Starting admin build (this may take 3-5 minutes)..."
+#           export NODE_ENV=production
+#           NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
+          
+#           # Debug: Show what was actually built
+#           echo "Checking build output..."
+#           find .medusa -type f -name "*.html" 2>/dev/null | head -10 || echo "No HTML files found"
+          
+#           # In Medusa v2, admin builds to .medusa/client/ but medusa start looks for .medusa/admin/
+#           # Create admin directory and copy/link client build to admin location
+#           if [ -f ".medusa/client/index.html" ]; then
+#             echo "✓ Found admin build at .medusa/client/index.html"
+#             echo "Creating .medusa/admin/ directory and copying client build..."
+#             mkdir -p .medusa/admin
+#             cp -r .medusa/client/* .medusa/admin/
+#             echo "✓ Admin build copied to .medusa/admin/"
+#           elif [ -f ".medusa/admin/index.html" ]; then
+#             echo "✓ Found admin build at .medusa/admin/index.html"
+#           else
+#             echo "ERROR: Admin build failed - index.html not found"
+#             echo "Checking .medusa structure:"
+#             ls -la .medusa/ 2>/dev/null || echo ".medusa directory doesn't exist"
+#             find .medusa -type f 2>/dev/null | head -20
+#             exit 1
+#           fi
+          
+#           # Verify build was successful
+#           if [ ! -f ".medusa/admin/index.html" ]; then
+#             echo "ERROR: Admin build verification failed"
+#             exit 1
+#           fi
+          
+#           echo "✓ Build successful! index.html found at .medusa/admin/index.html"
+#           ls -lh .medusa/admin/index.html
+
+#           pm2 delete medusaBackend || true
+#           pm2 start yarn --name medusaBackend -- start
+#           pm2 save
