@@ -88,9 +88,9 @@ jobs:
           
           # Restart PM2 with production start command
           echo "Restarting PM2..."
-          pm2 stop medusaBackend || true
-          pm2 delete medusaBackend || true
-          pm2 start yarn --name medusaBackend -- start
+          pm2 stop admin || true
+          pm2 delete admin || true
+          pm2 start yarn --name admin -- dev
           pm2 save
           
           echo "✓ Deployment complete!"
