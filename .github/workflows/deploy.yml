@@ -1,4 +1,4 @@
-name: Deploy Backend to EC2 (Medusa Production)
+name: Deploy Backend to EC2 (Medusa v2 Production)
 
 on:
   push:
@@ -9,11 +9,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
+      # 2️⃣ Upload project to EC2
       - name: Upload code to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -24,7 +26,8 @@ jobs:
           target: ${{ secrets.APP_PATH }}
           rm: false
 
-      - name: Install, build, and restart on EC2
+      # 3️⃣ Build & run on EC2
+      - name: Install, build, and restart Medusa
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -36,52 +39,55 @@ jobs:
             APP_PATH="${{ secrets.APP_PATH }}"
             cd "$APP_PATH"
 
-            # Node / Yarn
+            echo "==> Loading Node environment"
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
+            node -v
+            npm -v
+
+            echo "==> Enable Corepack & Yarn"
             corepack enable
             corepack prepare yarn@4.6.0 --activate
+            yarn -v
 
-            echo "Installing dependencies..."
+            echo "==> Clean old dependencies & builds"
             rm -rf node_modules
-            yarn install
+            rm -rf .medusa
 
-            echo "Cleaning old builds..."
-            rm -rf .medusa/admin .medusa/server static
+            echo "==> Install dependencies"
+            yarn install --immutable || yarn install
 
-            echo "Building Medusa (admin + backend)..."
-            NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
-
-            # 🔧 FIX: move admin build to expected location
-            if [ -f ".medusa/server/public/admin/index.html" ]; then
-              mkdir -p .medusa/admin
-              mv .medusa/server/public/admin/* .medusa/admin/
-            fi
-
-            # Verify admin build
-            if [ ! -f ".medusa/admin/index.html" ]; then
-              echo "❌ Admin index.html not found"
-              exit 1
-            fi
-
-            echo "✓ Admin build verified"
-
-            # Environment variables
+            echo "==> Set production environment variables"
             export NODE_ENV=production
-            export MEDUSA_ADMIN_URL="https://admin.zdacomm.com"
             export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
-            export BACKEND_URL="https://admin.zdacomm.com"
+            export MEDUSA_ADMIN_BACKEND_URL="https://admin.zdacomm.com"
             export ADMIN_CORS="https://admin.zdacomm.com"
             export STORE_CORS="https://store.zdacomm.com"
+            export BACKEND_URL="https://admin.zdacomm.com"
 
-            echo "Running migrations..."
+            echo "==> Build Medusa (admin + backend)"
+            NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
+
+            echo "==> Verify admin build"
+            if [ ! -f ".medusa/server/public/admin/index.html" ]; then
+              echo "❌ Admin build missing: .medusa/server/public/admin/index.html"
+              exit 1
+            fi
+            echo "✓ Admin build exists"
+
+            echo "==> Run database migrations"
             npx medusa db:migrate || true
 
-            echo "Restarting Medusa backend..."
+            echo "==> Restart Medusa with PM2"
             pm2 stop medusa-backend || true
             pm2 delete medusa-backend || true
-            pm2 start npx --name medusa-backend -- medusa start
+
+            pm2 start "npx medusa start" \
+              --name medusa-backend \
+              --cwd .medusa/server \
+              --env production
+
             pm2 save
 
-            echo "✓ Deployment complete"
+            echo "🚀 Deployment completed successfully"
