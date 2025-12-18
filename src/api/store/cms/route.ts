@@ -14,7 +14,7 @@ export async function GET(
     const [heroes, instructions, faqs] = await Promise.all([
       cmsService.listHeroes({ is_active: true }),
       cmsService.listInstructions({ is_active: true }),
-      cmsService.listFAQs({ is_active: true }),
+      cmsService.getFAQs({ is_active: true }),
     ])
     
     res.json({

@@ -64,7 +64,7 @@ class CMSService extends MedusaService({
   }
 
   async getInstruction(id: string) {
-    return await this.retrieveInstruction_(id)
+    return await this.retrieve(id)
   }
 
   async createInstruction(data: {
@@ -74,7 +74,7 @@ class CMSService extends MedusaService({
     sort_order?: number
     is_active?: boolean
   }) {
-    return await this.createInstruction_({
+    return await this.create({
       title: data.title,
       description: data.description || null,
       image_url: data.image_url || null,
@@ -90,25 +90,21 @@ class CMSService extends MedusaService({
     sort_order: number
     is_active: boolean
   }>) {
-    return await this.updateInstruction_(id, data)
+    return await this.update(id, data)
   }
 
   async deleteInstruction(id: string) {
-    return await this.deleteInstruction_(id)
+    return await this.delete(id)
   }
 
   // FAQ methods
-  async listFAQs(filters?: { is_active?: boolean }) {
-    const query: any = {}
-    if (filters?.is_active !== undefined) {
-      query.is_active = filters.is_active
-    }
-    const faqs = await this.listFAQ_(query)
+  async getFAQs(filters?: { is_active?: boolean }) {
+    const faqs = await this.list(filters)
     return faqs.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
   }
 
   async getFAQ(id: string) {
-    return await this.retrieveFAQ_(id)
+    return await this.retrieve(id)
   }
 
   async createFAQ(data: {
@@ -117,7 +113,7 @@ class CMSService extends MedusaService({
     sort_order?: number
     is_active?: boolean
   }) {
-    return await this.createFAQ_({
+    return await this.create({
       question: data.question,
       answer: data.answer,
       sort_order: data.sort_order || 0,
@@ -131,11 +127,11 @@ class CMSService extends MedusaService({
     sort_order: number
     is_active: boolean
   }>) {
-    return await this.updateFAQ_(id, data)
+    return await this.update(id, data)
   }
 
   async deleteFAQ(id: string) {
-    return await this.deleteFAQ_(id)
+    return await this.delete(id)
   }
 }
 

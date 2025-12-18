@@ -11,7 +11,7 @@ export async function GET(
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
     const { is_active } = req.query
     
-    const faqs = await cmsService.listFAQs(
+    const faqs = await cmsService.getFAQs(
       is_active !== undefined ? { is_active: is_active === "true" } : undefined
     )
     
