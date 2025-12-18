@@ -1,4 +1,4 @@
-name: Deploy Backend to EC2 (Medusa DEV)
+name: Deploy Backend to EC2 (Medusa Production)
 
 on:
   push:
@@ -50,19 +50,26 @@ jobs:
             corepack prepare yarn@4.6.0 --activate
 
             echo "Installing dependencies..."
-            yarn install
+            yarn install --production
+
+            echo "Building application..."
+            yarn build
 
             # Environment variables
-            export NODE_ENV=development
+            export NODE_ENV=production
             export MEDUSA_BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
             export BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
+
+            # Run database migrations
+            echo "Running database migrations..."
+            npx medusa db:migrate || echo "Migration failed or already up to date"
 
             # Restart app
             echo "Restarting Medusa backend..."
             pm2 stop medusa-backend || true
             pm2 delete medusa-backend || true
-            pm2 start yarn --name medusa-backend -- dev
+            pm2 start yarn --name medusa-backend -- start
             pm2 save
 
             echo "✓ Deployment complete"
-            echo "✓ Backend is running in dev mode at http://${{ secrets.EC2_HOST }}:9000"
+            echo "✓ Backend is running in production mode at http://${{ secrets.EC2_HOST }}:9000"
