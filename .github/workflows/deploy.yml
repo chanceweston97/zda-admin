@@ -9,9 +9,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
       - name: Deploy via SSH (git pull + pm2)
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -21,13 +18,38 @@ jobs:
           script: |
             set -e
 
-            APP_PATH="${{ secrets.APP_PATH }}"
-
             # Ensure app directory exists
-            mkdir -p $APP_PATH
-            cd $APP_PATH
+            mkdir -p ${{ secrets.APP_PATH }}
+            cd ${{ secrets.APP_PATH }}
 
-            # If repo not initialized, clone it
+            # Clone or reset repo
             if [ ! -d ".git" ]; then
               echo "Cloning repository..."
-              git clone https://g
+              git clone https://github.com/chanceweston97/zda-admin.git .
+            else
+              echo "Resetting to origin/main..."
+              git fetch origin
+              git reset --hard origin/main
+            fi
+
+            # Clean runtime artifacts
+            rm -rf .medusa dist medusa-config.js node_modules
+
+            # Node / Yarn
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+            corepack enable
+            corepack prepare yarn@4.6.0 --activate
+
+            yarn install
+
+            export NODE_ENV=development
+            export MEDUSA_BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
+
+            pm2 stop admin || true
+            pm2 delete admin || true
+            pm2 start yarn --name admin -- dev
+            pm2 save
+
+            echo "✓ Deployment complete"
