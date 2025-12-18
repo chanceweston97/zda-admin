@@ -9,7 +9,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH (git pull + pm2)
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for git operations
+
+      - name: Upload code to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          source: "."
+          target: ${{ secrets.APP_PATH }}
+          strip_components: 0
+          rm: false  # Don't remove existing files, we'll handle cleanup in the script
+
+      - name: Install and restart on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -20,23 +36,11 @@ jobs:
 
             # App directory
             APP_PATH="${{ secrets.APP_PATH }}"
-
-            # Ensure directory exists
-            mkdir -p "$APP_PATH"
             cd "$APP_PATH"
 
-            # Clone or hard reset repo (Git is source of truth)
-            if [ ! -d ".git" ]; then
-              echo "Cloning repository..."
-              git clone git@github.com:chanceweston97/zda-admin.git .
-            else
-              echo "Resetting repository to origin/main..."
-              git fetch origin
-              git reset --hard origin/main
-            fi
-
-            # Remove ALL runtime artifacts (prevents ghost configs)
-            rm -rf .medusa dist medusa-config.js node_modules
+            # Ensure static directory exists
+            mkdir -p static
+            chmod -R 755 static
 
             # Node + Yarn setup
             export NVM_DIR="$HOME/.nvm"
@@ -48,14 +52,17 @@ jobs:
             echo "Installing dependencies..."
             yarn install
 
-            # Environment (DEV mode)
+            # Environment variables
             export NODE_ENV=development
             export MEDUSA_BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
+            export BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
 
             # Restart app
-            pm2 stop admin || true
-            pm2 delete admin || true
-            pm2 start yarn --name admin -- dev
+            echo "Restarting Medusa backend..."
+            pm2 stop medusa-backend || true
+            pm2 delete medusa-backend || true
+            pm2 start yarn --name medusa-backend -- dev
             pm2 save
 
-            echo "✓ Deployment complete (DEV mode)"
+            echo "✓ Deployment complete"
+            echo "✓ Backend is running in dev mode at http://${{ secrets.EC2_HOST }}:9000"
