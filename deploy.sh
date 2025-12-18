@@ -16,11 +16,11 @@ git pull origin main
 
 # Install dependencies
 echo "📦 Installing dependencies..."
-npm install --production
+yarn install --production
 
 # Build the application
 echo "🔨 Building application..."
-npm run build
+yarn build
 
 # Run database migrations
 echo "🗄️  Running database migrations..."
@@ -29,7 +29,7 @@ npx medusa db:migrate || echo "⚠️  Migration failed or already up to date"
 # Restart the application
 echo "🔄 Restarting application..."
 if command -v pm2 &> /dev/null; then
-    pm2 restart medusa-backend || pm2 start npm --name medusa-backend -- run start
+    pm2 restart medusa-backend || pm2 start yarn --name medusa-backend -- start
 elif systemctl is-active --quiet medusa-backend; then
     sudo systemctl restart medusa-backend
 else

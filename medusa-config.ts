@@ -26,9 +26,6 @@ module.exports = defineConfig({
       resolve: "./src/modules/cable-customizer",
     },
     {
-      resolve: "./src/modules/cms",
-    },
-    {
       resolve: "@medusajs/medusa/payment",
 
     },
