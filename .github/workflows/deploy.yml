@@ -50,7 +50,7 @@ jobs:
             corepack prepare yarn@4.6.0 --activate
 
             echo "Installing dependencies..."
-            yarn install --production
+            yarn install
 
             echo "Building application..."
             yarn build
