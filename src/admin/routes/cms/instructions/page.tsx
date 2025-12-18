@@ -1,34 +1,24 @@
-// Hero Instructions Management Page
-import { Container, Heading, Button, Table, Badge, Text, Input, Textarea, Label, Switch } from "@medusajs/ui"
+// Hero Introduction Management Page
+import { Container, Heading, Button, Text, Input, Textarea, Label, Switch } from "@medusajs/ui"
 import { useState, useEffect } from "react"
 
-interface Instruction {
-  id: string
-  title: string
-  description?: string
-  image_url?: string
-  sort_order: number
-  is_active: boolean
-}
-
 const InstructionsPage = () => {
-  const [instructions, setInstructions] = useState<Instruction[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
+    name: "",
     title: "",
     description: "",
-    image_url: "",
-    sort_order: 0,
+    buttons: [] as Array<{ text: string; link: string }>,
+    image: "",
     is_active: true,
   })
+  const [newButton, setNewButton] = useState({ text: "", link: "" })
 
   useEffect(() => {
-    loadInstructions()
+    loadData()
   }, [])
 
-  const loadInstructions = async () => {
+  const loadData = async () => {
     setLoading(true)
     try {
       const response = await fetch("/admin/cms/instructions", {
@@ -36,10 +26,19 @@ const InstructionsPage = () => {
       })
       if (response.ok) {
         const data = await response.json()
-        setInstructions(data.instructions || [])
+        if (data.instruction) {
+          setFormData({
+            name: data.instruction.name || "",
+            title: data.instruction.title || "",
+            description: data.instruction.description || "",
+            buttons: data.instruction.buttons || [],
+            image: data.instruction.image || "",
+            is_active: data.instruction.is_active ?? true,
+          })
+        }
       }
     } catch (error) {
-      console.error("Error loading instructions:", error)
+      console.error("Error loading data:", error)
     } finally {
       setLoading(false)
     }
@@ -48,62 +47,22 @@ const InstructionsPage = () => {
   const handleSave = async () => {
     setLoading(true)
     try {
-      const method = editingId ? "PUT" : "POST"
-      const body = editingId
-        ? { id: editingId, ...formData }
-        : formData
-
       const response = await fetch("/admin/cms/instructions", {
-        method,
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(body),
+        body: JSON.stringify(formData),
       })
 
       if (response.ok) {
-        setShowForm(false)
-        setEditingId(null)
-        setFormData({
-          title: "",
-          description: "",
-          image_url: "",
-          sort_order: 0,
-          is_active: true,
-        })
-        loadInstructions()
+        alert("Saved successfully!")
+        loadData()
       }
     } catch (error) {
       console.error("Error saving:", error)
+      alert("Failed to save")
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleEdit = (instruction: Instruction) => {
-    setEditingId(instruction.id)
-    setFormData({
-      title: instruction.title,
-      description: instruction.description || "",
-      image_url: instruction.image_url || "",
-      sort_order: instruction.sort_order,
-      is_active: instruction.is_active,
-    })
-    setShowForm(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this instruction?")) return
-
-    try {
-      const response = await fetch(`/admin/cms/instructions?id=${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      })
-      if (response.ok) {
-        loadInstructions()
-      }
-    } catch (error) {
-      console.error("Error deleting:", error)
     }
   }
 
@@ -122,7 +81,7 @@ const InstructionsPage = () => {
         const data = await response.json()
         const fileUrl = data.files?.[0]?.url || data.uploads?.[0]?.url || data.url
         if (fileUrl) {
-          setFormData((prev) => ({ ...prev, image_url: fileUrl }))
+          setFormData((prev) => ({ ...prev, image: fileUrl }))
         }
       }
     } catch (error) {
@@ -130,163 +89,138 @@ const InstructionsPage = () => {
     }
   }
 
-  if (showForm) {
+  if (loading && !formData.title) {
     return (
       <Container>
-        <div className="mb-4">
-          <Heading level="h1">{editingId ? "Edit" : "Create"} Hero Instruction</Heading>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="title">Title *</Label>
-            <Input
-              id="title"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={4}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="image">Image</Label>
-            <Input
-              id="image"
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) handleFileUpload(file)
-              }}
-            />
-            {formData.image_url && (
-              <div className="mt-2">
-                <img src={formData.image_url} alt="Preview" className="w-32 h-32 object-cover rounded" />
-                <Input
-                  value={formData.image_url}
-                  onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                  className="mt-2"
-                  placeholder="Or enter image URL"
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <Label htmlFor="sort_order">Sort Order</Label>
-            <Input
-              id="sort_order"
-              type="number"
-              value={formData.sort_order}
-              onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
-            />
-          </div>
-
-          <div>
-            <Switch
-              checked={formData.is_active}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-            />
-            <Label htmlFor="is_active" className="ml-2">Active</Label>
-          </div>
-
-          <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={loading || !formData.title}>
-              {loading ? "Saving..." : "Save"}
-            </Button>
-            <Button variant="transparent" onClick={() => {
-              setShowForm(false)
-              setEditingId(null)
-            }}>
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <Text>Loading...</Text>
       </Container>
     )
   }
 
   return (
     <Container>
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <Heading level="h1">Hero Instructions</Heading>
-          <Text className="text-gray-600 mt-2">
-            Manage hero section introduction content
-          </Text>
-        </div>
-        <Button onClick={() => setShowForm(true)}>Add New Instruction</Button>
+      <div className="mb-6">
+        <Heading level="h1">Hero Introduction</Heading>
+        <Text className="text-gray-600 mt-2">
+          Edit hero section introduction text and images
+        </Text>
       </div>
 
-      {loading ? (
-        <Text>Loading...</Text>
-      ) : (
-        <Table>
-          <Table.Header>
-            <Table.Row>
-              <Table.HeaderCell>Title</Table.HeaderCell>
-              <Table.HeaderCell>Order</Table.HeaderCell>
-              <Table.HeaderCell>Status</Table.HeaderCell>
-              <Table.HeaderCell>Actions</Table.HeaderCell>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {instructions.map((instruction) => (
-              <Table.Row key={instruction.id}>
-                <Table.Cell>{instruction.title}</Table.Cell>
-                <Table.Cell>{instruction.sort_order}</Table.Cell>
-                <Table.Cell>
-                  <Badge color={instruction.is_active ? "green" : "red"}>
-                    {instruction.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                </Table.Cell>
-                <Table.Cell>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="transparent"
-                      onClick={() => handleEdit(instruction)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="transparent"
-                      onClick={() => handleDelete(instruction.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table>
-      )}
-
-      {instructions.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <Text className="text-gray-500">No instructions found. Create your first instruction!</Text>
+      <div className="space-y-6">
+        <div>
+          <Label htmlFor="title">Title</Label>
+          <Input
+            id="title"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            placeholder="Enabling Wireless Networks Since 2008"
+          />
         </div>
-      )}
+
+        <div>
+          <Label htmlFor="description">Description</Label>
+          <Textarea
+            id="description"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            rows={6}
+            placeholder="At ZDA Communications, we care about one thing above all: reliable wireless performance..."
+          />
+        </div>
+
+        <div>
+          <Label>Buttons</Label>
+          <div className="space-y-2 mt-2">
+            {formData.buttons.map((button, index) => (
+              <div key={index} className="flex gap-2 items-center p-2 border rounded">
+                <Text className="flex-1">{button.text} → {button.link}</Text>
+                <Button
+                  variant="transparent"
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      buttons: formData.buttons.filter((_, i) => i !== index),
+                    })
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <div className="border-2 border-dashed p-4 rounded space-y-2">
+              <Input
+                placeholder="Button Text"
+                value={newButton.text}
+                onChange={(e) => setNewButton({ ...newButton, text: e.target.value })}
+              />
+              <Input
+                placeholder="Button Link"
+                value={newButton.link}
+                onChange={(e) => setNewButton({ ...newButton, link: e.target.value })}
+              />
+              <Button
+                onClick={() => {
+                  if (newButton.text && newButton.link) {
+                    setFormData({
+                      ...formData,
+                      buttons: [...formData.buttons, { ...newButton }],
+                    })
+                    setNewButton({ text: "", link: "" })
+                  }
+                }}
+                disabled={!newButton.text || !newButton.link}
+              >
+                Add Button
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="image">Image</Label>
+          <Input
+            id="image"
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleFileUpload(file)
+            }}
+          />
+          <Input
+            value={formData.image}
+            onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+            className="mt-2"
+            placeholder="Or enter image URL"
+          />
+          {formData.image && (
+            <img src={formData.image} alt="Preview" className="w-64 h-64 object-cover rounded mt-2" />
+          )}
+        </div>
+
+        <div>
+          <Switch
+            checked={formData.is_active}
+            onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+          />
+          <Label htmlFor="is_active" className="ml-2">Active</Label>
+        </div>
+
+        <div className="flex gap-2">
+          <Button onClick={handleSave} disabled={loading}>
+            {loading ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </div>
     </Container>
   )
 }
 
 export const config = {
-  label: "Hero Instruction",
+  label: "Hero Introduction",
   icon: "DocumentText",
   path: "/cms/instructions",
   parent: "CMS",
 }
 
 export default InstructionsPage
-

@@ -1,12 +1,13 @@
-// CMS Hero Instruction Model
+// CMS Hero Introduction Model
 import { model } from "@medusajs/framework/utils"
 
 export const Instruction = model.define("cms_instruction", {
   id: model.id().primaryKey(),
-  title: model.text(),
+  name: model.text().nullable(),
+  title: model.text().nullable(),
   description: model.text().nullable(),
-  image_url: model.text().nullable(),
-  sort_order: model.number().default(0),
+  buttons: model.json().nullable(), // Array of { text: string, link: string }
+  image: model.text().nullable(),
   is_active: model.boolean().default(true),
 })
 

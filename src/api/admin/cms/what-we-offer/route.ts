@@ -1,4 +1,4 @@
-// Admin API for Hero Instructions
+// Admin API for What We Offer
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework"
 import { CMS_MODULE } from "../../../../modules/cms"
 import type CMSService from "../../../../modules/cms/service"
@@ -11,14 +11,14 @@ export async function GET(
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
     const { is_active } = req.query
     
-    const instructions = await cmsService.listInstructions(
+    const offer = await cmsService.getWhatWeOffer(
       is_active !== undefined ? { is_active: is_active === "true" } : undefined
     )
     
-    res.json({ instruction: instructions[0] || null })
+    res.json({ offer })
   } catch (error: any) {
     res.status(500).json({
-      message: "Failed to fetch instructions",
+      message: "Failed to fetch what we offer",
       error: error.message,
     })
   }
@@ -30,11 +30,11 @@ export async function POST(
 ): Promise<void> {
   try {
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
-    const instruction = await cmsService.createOrUpdateInstruction(req.body)
-    res.json({ instruction })
+    const offer = await cmsService.createOrUpdateWhatWeOffer(req.body)
+    res.json({ offer })
   } catch (error: any) {
     res.status(500).json({
-      message: "Failed to save instruction",
+      message: "Failed to save what we offer",
       error: error.message,
     })
   }
@@ -46,28 +46,11 @@ export async function PUT(
 ): Promise<void> {
   try {
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
-    const instruction = await cmsService.createOrUpdateInstruction(req.body)
-    res.json({ instruction })
+    const offer = await cmsService.createOrUpdateWhatWeOffer(req.body)
+    res.json({ offer })
   } catch (error: any) {
     res.status(500).json({
-      message: "Failed to update instruction",
-      error: error.message,
-    })
-  }
-}
-
-export async function DELETE(
-  req: MedusaRequest,
-  res: MedusaResponse
-): Promise<void> {
-  try {
-    const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
-    const { id } = req.query as { id: string }
-    await cmsService.deleteInstruction(id)
-    res.json({ message: "Instruction deleted successfully" })
-  } catch (error: any) {
-    res.status(500).json({
-      message: "Failed to delete instruction",
+      message: "Failed to update what we offer",
       error: error.message,
     })
   }

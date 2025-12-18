@@ -1,32 +1,31 @@
 // FAQs Management Page
-import { Container, Heading, Button, Table, Badge, Text, Input, Textarea, Label, Switch } from "@medusajs/ui"
+import { Container, Heading, Button, Text, Input, Textarea, Label, Switch } from "@medusajs/ui"
 import { useState, useEffect } from "react"
 
-interface FAQ {
-  id: string
+interface FAQItem {
   question: string
   answer: string
-  sort_order: number
-  is_active: boolean
+  order?: number
 }
 
 const FAQsPage = () => {
-  const [faqs, setFaqs] = useState<FAQ[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
-    question: "",
-    answer: "",
-    sort_order: 0,
+    name: "",
+    title: "",
+    contact_button_text: "",
+    contact_button_link: "",
+    items: [] as FAQItem[],
     is_active: true,
   })
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [newItem, setNewItem] = useState<FAQItem>({ question: "", answer: "", order: 0 })
 
   useEffect(() => {
-    loadFAQs()
+    loadData()
   }, [])
 
-  const loadFAQs = async () => {
+  const loadData = async () => {
     setLoading(true)
     try {
       const response = await fetch("/admin/cms/faqs", {
@@ -34,10 +33,19 @@ const FAQsPage = () => {
       })
       if (response.ok) {
         const data = await response.json()
-        setFaqs(data.faqs || [])
+        if (data.faq) {
+          setFormData({
+            name: data.faq.name || "",
+            title: data.faq.title || "",
+            contact_button_text: data.faq.contact_button_text || "",
+            contact_button_link: data.faq.contact_button_link || "",
+            items: data.faq.items || [],
+            is_active: data.faq.is_active ?? true,
+          })
+        }
       }
     } catch (error) {
-      console.error("Error loading FAQs:", error)
+      console.error("Error loading data:", error)
     } finally {
       setLoading(false)
     }
@@ -46,187 +54,201 @@ const FAQsPage = () => {
   const handleSave = async () => {
     setLoading(true)
     try {
-      const method = editingId ? "PUT" : "POST"
-      const body = editingId
-        ? { id: editingId, ...formData }
-        : formData
-
       const response = await fetch("/admin/cms/faqs", {
-        method,
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(body),
+        body: JSON.stringify(formData),
       })
 
       if (response.ok) {
-        setShowForm(false)
-        setEditingId(null)
-        setFormData({
-          question: "",
-          answer: "",
-          sort_order: 0,
-          is_active: true,
-        })
-        loadFAQs()
+        alert("Saved successfully!")
+        loadData()
       }
     } catch (error) {
       console.error("Error saving:", error)
+      alert("Failed to save")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleEdit = (faq: FAQ) => {
-    setEditingId(faq.id)
-    setFormData({
-      question: faq.question,
-      answer: faq.answer,
-      sort_order: faq.sort_order,
-      is_active: faq.is_active,
-    })
-    setShowForm(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this FAQ?")) return
-
-    try {
-      const response = await fetch(`/admin/cms/faqs?id=${id}`, {
-        method: "DELETE",
-        credentials: "include",
+  const handleAddItem = () => {
+    if (newItem.question && newItem.answer) {
+      const order = formData.items.length + 1
+      setFormData({
+        ...formData,
+        items: [...formData.items, { ...newItem, order }],
       })
-      if (response.ok) {
-        loadFAQs()
-      }
-    } catch (error) {
-      console.error("Error deleting:", error)
+      setNewItem({ question: "", answer: "", order: 0 })
     }
   }
 
-  if (showForm) {
+  const handleEditItem = (index: number) => {
+    setNewItem({ ...formData.items[index] })
+    setEditingIndex(index)
+  }
+
+  const handleUpdateItem = () => {
+    if (editingIndex !== null) {
+      const updated = [...formData.items]
+      updated[editingIndex] = { ...newItem }
+      setFormData({ ...formData, items: updated })
+      setEditingIndex(null)
+      setNewItem({ question: "", answer: "", order: 0 })
+    }
+  }
+
+  const handleRemoveItem = (index: number) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((_, i) => i !== index),
+    })
+  }
+
+  const handleMoveItem = (index: number, direction: "up" | "down") => {
+    const items = [...formData.items]
+    const newIndex = direction === "up" ? index - 1 : index + 1
+    if (newIndex >= 0 && newIndex < items.length) {
+      [items[index], items[newIndex]] = [items[newIndex], items[index]]
+      items.forEach((item, i) => {
+        item.order = i + 1
+      })
+      setFormData({ ...formData, items })
+    }
+  }
+
+  if (loading && !formData.title) {
     return (
       <Container>
-        <div className="mb-4">
-          <Heading level="h1">{editingId ? "Edit" : "Create"} FAQ</Heading>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="question">Question *</Label>
-            <Input
-              id="question"
-              value={formData.question}
-              onChange={(e) => setFormData({ ...formData, question: e.target.value })}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="answer">Answer *</Label>
-            <Textarea
-              id="answer"
-              value={formData.answer}
-              onChange={(e) => setFormData({ ...formData, answer: e.target.value })}
-              rows={6}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="sort_order">Sort Order</Label>
-            <Input
-              id="sort_order"
-              type="number"
-              value={formData.sort_order}
-              onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
-            />
-          </div>
-
-          <div>
-            <Switch
-              checked={formData.is_active}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-            />
-            <Label htmlFor="is_active" className="ml-2">Active</Label>
-          </div>
-
-          <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={loading || !formData.question || !formData.answer}>
-              {loading ? "Saving..." : "Save"}
-            </Button>
-            <Button variant="transparent" onClick={() => {
-              setShowForm(false)
-              setEditingId(null)
-            }}>
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <Text>Loading...</Text>
       </Container>
     )
   }
 
   return (
     <Container>
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <Heading level="h1">FAQs</Heading>
-          <Text className="text-gray-600 mt-2">
-            Manage frequently asked questions
-          </Text>
-        </div>
-        <Button onClick={() => setShowForm(true)}>Add New FAQ</Button>
+      <div className="mb-6">
+        <Heading level="h1">FAQs</Heading>
+        <Text className="text-gray-600 mt-2">
+          Manage frequently asked questions
+        </Text>
       </div>
 
-      {loading ? (
-        <Text>Loading...</Text>
-      ) : (
-        <Table>
-          <Table.Header>
-            <Table.Row>
-              <Table.HeaderCell>Question</Table.HeaderCell>
-              <Table.HeaderCell>Order</Table.HeaderCell>
-              <Table.HeaderCell>Status</Table.HeaderCell>
-              <Table.HeaderCell>Actions</Table.HeaderCell>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {faqs.map((faq) => (
-              <Table.Row key={faq.id}>
-                <Table.Cell>{faq.question}</Table.Cell>
-                <Table.Cell>{faq.sort_order}</Table.Cell>
-                <Table.Cell>
-                  <Badge color={faq.is_active ? "green" : "red"}>
-                    {faq.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                </Table.Cell>
-                <Table.Cell>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="transparent"
-                      onClick={() => handleEdit(faq)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="transparent"
-                      onClick={() => handleDelete(faq.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table>
-      )}
-
-      {faqs.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <Text className="text-gray-500">No FAQs found. Create your first FAQ!</Text>
+      <div className="space-y-6">
+        <div>
+          <Label htmlFor="title">Title</Label>
+          <Input
+            id="title"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            placeholder="Frequently Asked Questions"
+          />
         </div>
-      )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="contact_button_text">Contact Button Text</Label>
+            <Input
+              id="contact_button_text"
+              value={formData.contact_button_text}
+              onChange={(e) => setFormData({ ...formData, contact_button_text: e.target.value })}
+              placeholder="Contact Us"
+            />
+          </div>
+          <div>
+            <Label htmlFor="contact_button_link">Contact Button Link</Label>
+            <Input
+              id="contact_button_link"
+              value={formData.contact_button_link}
+              onChange={(e) => setFormData({ ...formData, contact_button_link: e.target.value })}
+              placeholder="/contact"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label>FAQ Items</Label>
+          <div className="space-y-4 mt-2">
+            {formData.items
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+              .map((item, index) => (
+                <div key={index} className="border p-4 rounded">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <Text className="font-medium">Q{index + 1}: {item.question}</Text>
+                      <Text className="text-sm text-gray-600 mt-1">{item.answer}</Text>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="transparent"
+                        onClick={() => handleMoveItem(index, "up")}
+                        disabled={index === 0}
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        variant="transparent"
+                        onClick={() => handleMoveItem(index, "down")}
+                        disabled={index === formData.items.length - 1}
+                      >
+                        ↓
+                      </Button>
+                      <Button variant="transparent" onClick={() => handleEditItem(index)}>
+                        Edit
+                      </Button>
+                      <Button variant="transparent" onClick={() => handleRemoveItem(index)}>
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+            <div className="border-2 border-dashed p-4 rounded space-y-4">
+              <Heading level="h3">{editingIndex !== null ? "Edit" : "Add"} FAQ Item</Heading>
+              
+              <div>
+                <Label>Question *</Label>
+                <Input
+                  value={newItem.question}
+                  onChange={(e) => setNewItem({ ...newItem, question: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <Label>Answer *</Label>
+                <Textarea
+                  value={newItem.answer}
+                  onChange={(e) => setNewItem({ ...newItem, answer: e.target.value })}
+                  rows={4}
+                />
+              </div>
+
+              <Button
+                onClick={editingIndex !== null ? handleUpdateItem : handleAddItem}
+                disabled={!newItem.question || !newItem.answer}
+              >
+                {editingIndex !== null ? "Update" : "Add"} FAQ
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <Switch
+            checked={formData.is_active}
+            onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+          />
+          <Label htmlFor="is_active" className="ml-2">Active</Label>
+        </div>
+
+        <div className="flex gap-2">
+          <Button onClick={handleSave} disabled={loading}>
+            {loading ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </div>
     </Container>
   )
 }
@@ -239,4 +261,3 @@ export const config = {
 }
 
 export default FAQsPage
-
