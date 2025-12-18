@@ -18,38 +18,44 @@ jobs:
           script: |
             set -e
 
-            # Ensure app directory exists
-            mkdir -p ${{ secrets.APP_PATH }}
-            cd ${{ secrets.APP_PATH }}
+            # App directory
+            APP_PATH="${{ secrets.APP_PATH }}"
 
-            # Clone or reset repo
+            # Ensure directory exists
+            mkdir -p "$APP_PATH"
+            cd "$APP_PATH"
+
+            # Clone or hard reset repo (Git is source of truth)
             if [ ! -d ".git" ]; then
               echo "Cloning repository..."
-              git clone https://github.com/chanceweston97/zda-admin.git .
+              git clone git@github.com:chanceweston97/zda-admin.git .
             else
-              echo "Resetting to origin/main..."
+              echo "Resetting repository to origin/main..."
               git fetch origin
               git reset --hard origin/main
             fi
 
-            # Clean runtime artifacts
+            # Remove ALL runtime artifacts (prevents ghost configs)
             rm -rf .medusa dist medusa-config.js node_modules
 
-            # Node / Yarn
+            # Node + Yarn setup
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
             corepack enable
             corepack prepare yarn@4.6.0 --activate
 
+            echo "Installing dependencies..."
             yarn install
 
+            # Environment (DEV mode)
             export NODE_ENV=development
             export MEDUSA_BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
 
+            # Restart app
             pm2 stop admin || true
             pm2 delete admin || true
             pm2 start yarn --name admin -- dev
             pm2 save
 
-            echo "✓ Deployment complete"
+            echo "✓ Deployment complete (DEV mode)"
