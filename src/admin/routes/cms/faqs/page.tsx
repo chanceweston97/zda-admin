@@ -234,6 +234,7 @@ const FAQsPage = () => {
 export const config = {
   label: "FAQ",
   icon: "QuestionMarkCircle",
+  path: "/cms/faqs",
   parent: "CMS",
 }
 

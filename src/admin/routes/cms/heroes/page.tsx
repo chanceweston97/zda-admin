@@ -297,6 +297,7 @@ const HeroesPage = () => {
 export const config = {
   label: "Hero Banner",
   icon: "Photo",
+  path: "/cms/heroes",
   parent: "CMS",
 }
 

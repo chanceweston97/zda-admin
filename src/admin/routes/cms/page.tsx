@@ -52,6 +52,7 @@ const CMSPage = () => {
 export const config = {
   label: "CMS",
   icon: "DocumentText",
+  path: "/cms",
 }
 
 export default CMSPage

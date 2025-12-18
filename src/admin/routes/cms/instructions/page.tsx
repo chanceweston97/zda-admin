@@ -284,6 +284,7 @@ const InstructionsPage = () => {
 export const config = {
   label: "Hero Instruction",
   icon: "DocumentText",
+  path: "/cms/instructions",
   parent: "CMS",
 }
 
