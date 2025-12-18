@@ -25,6 +25,17 @@ jobs:
           strip_components: 0
           rm: false  # Don't remove existing files, we'll handle cleanup in the script
 
+      - name: Cleanup CMS files on EC2
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            APP_PATH="${{ secrets.APP_PATH }}"
+            cd "$APP_PATH"
+            rm -rf src/modules/cms src/api/admin/cms src/api/store/cms src/admin/routes/cms
+
       - name: Install and restart on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -65,10 +76,10 @@ jobs:
             npx medusa db:migrate || echo "Migration failed or already up to date"
 
             # Restart app
-            echo "Restarting Medusa backend..."
-            pm2 stop medusa-backend || true
-            pm2 delete medusa-backend || true
-            pm2 start yarn --name medusa-backend -- start
+            echo "Restarting Admin Backend.."
+            pm2 stop admin || true
+            pm2 delete admin || true
+            pm2 start npx medusa --name admin -- start
             pm2 save
 
             echo "✓ Deployment complete"
