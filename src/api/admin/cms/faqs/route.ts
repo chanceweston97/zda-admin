@@ -11,14 +11,14 @@ export async function GET(
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
     const { is_active } = req.query
     
-    const faq = await cmsService.getFAQ(
+    const faqs = await cmsService.listFAQs(
       is_active !== undefined ? { is_active: is_active === "true" } : undefined
     )
     
-    res.json({ faq })
+    res.json({ faqs })
   } catch (error: any) {
     res.status(500).json({
-      message: "Failed to fetch FAQ",
+      message: "Failed to fetch FAQs",
       error: error.message,
     })
   }
@@ -30,11 +30,11 @@ export async function POST(
 ): Promise<void> {
   try {
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
-    const faq = await cmsService.createOrUpdateFAQ(req.body)
+    const faq = await cmsService.createFAQ(req.body)
     res.json({ faq })
   } catch (error: any) {
     res.status(500).json({
-      message: "Failed to save FAQ",
+      message: "Failed to create FAQ",
       error: error.message,
     })
   }
@@ -46,7 +46,8 @@ export async function PUT(
 ): Promise<void> {
   try {
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
-    const faq = await cmsService.createOrUpdateFAQ(req.body)
+    const { id, ...data } = req.body
+    const faq = await cmsService.updateFAQ(id, data)
     res.json({ faq })
   } catch (error: any) {
     res.status(500).json({

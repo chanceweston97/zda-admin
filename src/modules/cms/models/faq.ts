@@ -3,11 +3,9 @@ import { model } from "@medusajs/framework/utils"
 
 export const FAQ = model.define("cms_faq", {
   id: model.id().primaryKey(),
-  name: model.text().nullable(),
-  title: model.text().nullable(),
-  contact_button_text: model.text().nullable(),
-  contact_button_link: model.text().nullable(),
-  items: model.json(), // Array of { question: string, answer: string, order: number }
+  question: model.text(),
+  answer: model.text(),
+  sort_order: model.number().default(0),
   is_active: model.boolean().default(true),
 })
 

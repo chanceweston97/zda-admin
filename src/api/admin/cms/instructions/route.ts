@@ -15,7 +15,7 @@ export async function GET(
       is_active !== undefined ? { is_active: is_active === "true" } : undefined
     )
     
-    res.json({ instruction: instructions[0] || null })
+    res.json({ instructions })
   } catch (error: any) {
     res.status(500).json({
       message: "Failed to fetch instructions",
@@ -30,11 +30,11 @@ export async function POST(
 ): Promise<void> {
   try {
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
-    const instruction = await cmsService.createOrUpdateInstruction(req.body)
+    const instruction = await cmsService.createInstruction(req.body)
     res.json({ instruction })
   } catch (error: any) {
     res.status(500).json({
-      message: "Failed to save instruction",
+      message: "Failed to create instruction",
       error: error.message,
     })
   }
@@ -46,7 +46,8 @@ export async function PUT(
 ): Promise<void> {
   try {
     const cmsService: CMSService = req.scope.resolve(CMS_MODULE)
-    const instruction = await cmsService.createOrUpdateInstruction(req.body)
+    const { id, ...data } = req.body
+    const instruction = await cmsService.updateInstruction(id, data)
     res.json({ instruction })
   } catch (error: any) {
     res.status(500).json({
