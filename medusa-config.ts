@@ -3,10 +3,11 @@ import { loadEnv, defineConfig } from '@medusajs/framework/utils'
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
 // Get backend URL for file service
-// Note: backend_url should be the base URL only, NOT including /static
-// Medusa automatically serves static files from the static directory
+// Include /static in the URL so file-local provider generates correct URLs
 const getBackendUrl = () => {
-  return process.env.MEDUSA_BACKEND_URL || process.env.BACKEND_URL || "http://localhost:9000"
+  const baseUrl = process.env.MEDUSA_BACKEND_URL || process.env.BACKEND_URL || "http://localhost:9000"
+  // Remove trailing slash if present, then add /static
+  return baseUrl.replace(/\/$/, "") + "/static"
 }
 
 module.exports = defineConfig({
