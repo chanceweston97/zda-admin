@@ -25,12 +25,9 @@ module.exports = defineConfig({
     },
     {
       resolve: "@medusajs/medusa/payment",
-      // Payment module is required for checkout
-      // Manual payment (COD) is available by default
+
     },
-    // Register File Module with backend_url option
-    // This is required for file uploads to use the correct server URL
-    // See: https://docs.medusajs.com/resources/infrastructure-modules/file/local
+   
     {
       resolve: "@medusajs/medusa/file",
       options: {
@@ -46,7 +43,5 @@ module.exports = defineConfig({
         ],
       },
     },
-    // Stripe payment provider removed - payments are handled on the frontend
-    // Frontend processes Stripe payments directly, then creates orders in Medusa
   ],
 })

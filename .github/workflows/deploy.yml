@@ -1,5 +1,4 @@
-          
-name: Deploy Backend to EC2
+name: Deploy Backend to EC2 (Medusa DEV)
 
 on:
   push:
@@ -10,52 +9,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Upload project to EC2
-      uses: appleboy/scp-action@v0.1.4
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_KEY }}
-        source: "."
-        target: ${{ secrets.APP_PATH }}
+      - name: Deploy via SSH (git pull + pm2)
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            set -e
 
-    - name: Build and run on EC2
-      uses: appleboy/ssh-action@v0.1.7
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_KEY }}
-        script: |
-          set -e
+            APP_PATH="${{ secrets.APP_PATH }}"
 
-          cd ${{ secrets.APP_PATH }}
+            # Ensure app directory exists
+            mkdir -p $APP_PATH
+            cd $APP_PATH
 
-          # Setup Node.js environment
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-          # Setup Yarn
-          corepack enable
-          corepack prepare yarn@4.6.0 --activate
-
-          echo "Installing dependencies..."
-          yarn install
-
-          # Environment
-          export NODE_ENV=development
-          export MEDUSA_BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
-
-          # Stop old process
-          pm2 stop admin || true
-          pm2 delete admin || true
-
-          echo "Starting Medusa in DEV mode..."
-          pm2 start yarn --name admin -- dev
-
-          pm2 save
-
-          echo "✓ Deployment complete (DEV mode)"
-
+            # If repo not initialized, clone it
+            if [ ! -d ".git" ]; then
+              echo "Cloning repository..."
+              git clone https://g
