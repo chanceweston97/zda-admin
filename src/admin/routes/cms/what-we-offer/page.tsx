@@ -359,7 +359,6 @@ const WhatWeOfferPage = () => {
 export const config = {
   label: "What We Offer",
   icon: "Gift",
-  path: "/cms/what-we-offer",
   parent: "CMS",
 }
 

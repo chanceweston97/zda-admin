@@ -214,7 +214,6 @@ const ProudPartnersPage = () => {
 export const config = {
   label: "Proud Partners",
   icon: "Users",
-  path: "/cms/proud-partners",
   parent: "CMS",
 }
 

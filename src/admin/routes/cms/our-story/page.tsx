@@ -431,7 +431,6 @@ const OurStoryPage = () => {
 export const config = {
   label: "Our Story",
   icon: "Book",
-  path: "/cms/our-story",
   parent: "CMS",
 }
 
