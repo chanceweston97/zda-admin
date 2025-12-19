@@ -42,11 +42,9 @@ jobs:
             mkdir -p static
             chmod -R 755 static
 
-            echo "Checking if yarn is installed..."
-            echo $PATH
-            which yarn
-
             echo "Installing dependencies..."
+            cd "$APP_PATH"
+            echo "PATH: $PATH"
             yarn install
 
             echo "Building application..."
