@@ -1,4 +1,4 @@
-name: Deploy Backend to EC2 (Medusa v2 Production)
+name: Deploy Backend to EC2 (Medusa Production)
 
 on:
   push:
@@ -10,9 +10,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Fetch all history for git operations
 
       - name: Upload code to EC2
         uses: appleboy/scp-action@v0.1.4
@@ -22,9 +22,21 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           source: "."
           target: ${{ secrets.APP_PATH }}
-          rm: false
+          strip_components: 0
+          rm: false  # Don't remove existing files, we'll handle cleanup in the script
 
-      - name: Install, Build & Restart Medusa on EC2
+      - name: Cleanup CMS files on EC2
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            APP_PATH="${{ secrets.APP_PATH }}"
+            cd "$APP_PATH"
+            rm -rf src/modules/cms src/api/admin/cms src/api/store/cms src/admin/routes/cms
+
+      - name: Install and restart on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -33,60 +45,54 @@ jobs:
           script: |
             set -e
 
+            # App directory
             APP_PATH="${{ secrets.APP_PATH }}"
             cd "$APP_PATH"
 
-            echo "==> Load Node environment"
+            # Ensure static directory exists
+            mkdir -p static
+            chmod -R 755 static
+
+            # Node + Yarn setup
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-            node -v
-            npm -v
-
-            echo "==> Setup Corepack (user-space only)"
-            export COREPACK_HOME="$HOME/.corepack"
-            mkdir -p "$COREPACK_HOME"
+            corepack enable
             corepack prepare yarn@4.6.0 --activate
 
-            yarn -v
+            echo "Installing dependencies..."
+            yarn install
 
-            echo "==> Clean previous builds"
-            rm -rf node_modules
-            rm -rf .medusa
+            echo "Building application..."
+            npx medusa build
 
-            echo "==> Install dependencies"
-            yarn install --immutable
-
-            echo "==> Export production environment variables"
-            export NODE_ENV=production
-            export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
-            export MEDUSA_ADMIN_BACKEND_URL="https://admin.zdacomm.com"
-            export BACKEND_URL="https://admin.zdacomm.com"
-            export ADMIN_CORS="https://admin.zdacomm.com"
-            export STORE_CORS="https://store.zdacomm.com"
-
-            echo "==> Build Medusa (admin + backend)"
-            NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
-
-            echo "==> Verify admin build"
-            if [ ! -f ".medusa/server/public/admin/index.html" ]; then
-              echo "❌ Admin index.html not found"
-              exit 1
+            # Verify admin build exists
+            if [ ! -f ".medusa/admin/index.html" ]; then
+              echo "❌ Admin build failed - index.html not found"
+              echo "Retrying build..."
+              NODE_OPTIONS="--max-old-space-size=4096" yarn build
+              if [ ! -f ".medusa/admin/index.html" ]; then
+                echo "❌ Build failed again. Exiting."
+                exit 1
+              fi
             fi
-            echo "✓ Admin build exists"
+            echo "✓ Build completed successfully"
 
-            echo "==> Run database migrations"
-            npx medusa db:migrate || true
+            # Environment variables
+            export NODE_ENV=production
+            export MEDUSA_BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
+            export BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
 
-            echo "==> Restart Medusa with PM2"
-            pm2 stop medusa-backend || true
-            pm2 delete medusa-backend || true
+            # Run database migrations
+            echo "Running database migrations..."
+            npx medusa db:migrate || echo "Migration failed or already up to date"
 
-            pm2 start "npx medusa start" \
-              --name medusa-backend \
-              --cwd .medusa/server \
-              --env production
-
+            # Restart app
+            echo "Restarting Admin Backend.."
+            pm2 stop admin || true
+            pm2 delete admin || true
+            pm2 start npx medusa --name admin --cwd "$APP_PATH/.medusa/server" -- start
             pm2 save
 
-            echo "🚀 Deployment completed successfully"
+            echo "✓ Deployment complete"
+            echo "✓ Backend is running in production mode at http://${{ secrets.EC2_HOST }}:9000"
