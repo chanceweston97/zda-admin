@@ -57,8 +57,11 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-            corepack enable
-            corepack prepare yarn@4.6.0 --activate
+            # Use yarn directly if available, otherwise try corepack
+            if ! command -v yarn &> /dev/null; then
+              corepack enable || true
+              corepack prepare yarn@4.6.0 --activate || true
+            fi
 
             echo "Installing dependencies..."
             yarn install
@@ -70,7 +73,7 @@ jobs:
             if [ ! -f ".medusa/admin/index.html" ]; then
               echo "❌ Admin build failed - index.html not found"
               echo "Retrying build..."
-              NODE_OPTIONS="--max-old-space-size=4096" yarn build
+              NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
               if [ ! -f ".medusa/admin/index.html" ]; then
                 echo "❌ Build failed again. Exiting."
                 exit 1
@@ -91,7 +94,7 @@ jobs:
             echo "Restarting Admin Backend.."
             pm2 stop admin || true
             pm2 delete admin || true
-            pm2 start npx medusa --name admin --cwd "$APP_PATH/.medusa/server" -- start
+            pm2 start npx --name admin --cwd "$APP_PATH/.medusa/server" -- medusa start
             pm2 save
 
             echo "✓ Deployment complete"
