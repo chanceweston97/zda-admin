@@ -25,17 +25,6 @@ jobs:
           strip_components: 0
           rm: false  # Don't remove existing files, we'll handle cleanup in the script
 
-      - name: Cleanup CMS files on EC2
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          script: |
-            APP_PATH="${{ secrets.APP_PATH }}"
-            cd "$APP_PATH"
-            rm -rf src/modules/cms src/api/admin/cms src/api/store/cms src/admin/routes/cms
-
       - name: Install and restart on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -57,43 +46,19 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-            # Install yarn via npm (skip corepack completely)
-            if ! command -v yarn &> /dev/null; then
-              echo "Installing yarn via npm..."
-              npm install -g yarn
-            fi
-
-            # Verify yarn is available, fallback to npm if not
-            if command -v yarn &> /dev/null; then
-              echo "✓ Using yarn"
-              INSTALL_CMD="yarn install"
-            else
-              echo "⚠️  Yarn not available, using npm"
-              INSTALL_CMD="npm install"
-            fi
-
             echo "Installing dependencies..."
-            $INSTALL_CMD
+            yarn install
 
             echo "Building application..."
             npx medusa build
 
-            # Verify admin build exists
-            if [ ! -f ".medusa/admin/index.html" ]; then
-              echo "❌ Admin build failed - index.html not found"
-              echo "Retrying build..."
-              NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
-              if [ ! -f ".medusa/admin/index.html" ]; then
-                echo "❌ Build failed again. Exiting."
-                exit 1
-              fi
-            fi
-            echo "✓ Build completed successfully"
-
             # Environment variables
             export NODE_ENV=production
-            export MEDUSA_BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
-            export BACKEND_URL="http://${{ secrets.EC2_HOST }}:9000"
+            export MEDUSA_ADMIN_URL="https://admin.zdacomm.com"
+            export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
+            export BACKEND_URL="https://admin.zdacomm.com"
+            export ADMIN_CORS="https://admin.zdacomm.com"
+            export STORE_CORS="https://store.zdacomm.com"
 
             # Run database migrations
             echo "Running database migrations..."
@@ -107,4 +72,4 @@ jobs:
             pm2 save
 
             echo "✓ Deployment complete"
-            echo "✓ Backend is running in production mode at http://${{ secrets.EC2_HOST }}:9000"
+            echo "✓ Backend is running in production mode at https://admin.zdacomm.com"
