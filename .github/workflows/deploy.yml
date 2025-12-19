@@ -1,93 +1,55 @@
-name: Deploy Backend to EC2 (Medusa v2 Production)
+set -e
 
-on:
-  push:
-    branches: ["main"]
+APP_PATH="${{ secrets.APP_PATH }}"
+cd "$APP_PATH"
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+echo "==> Loading Node environment"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-    steps:
-      # 1️⃣ Checkout
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+node -v
+npm -v
 
-      # 2️⃣ Upload project to EC2
-      - name: Upload code to EC2
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          source: "."
-          target: ${{ secrets.APP_PATH }}
-          rm: false
+echo "==> Ensure Yarn exists"
+yarn -v || npm install -g yarn@1.22.22
 
-      # 3️⃣ Build & run on EC2
-      - name: Install, build, and restart Medusa
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          script: |
-            set -e
+echo "==> Clean old builds"
+rm -rf node_modules
+rm -rf .medusa
 
-            APP_PATH="${{ secrets.APP_PATH }}"
-            cd "$APP_PATH"
+echo "==> Install dependencies"
+yarn install
 
-            echo "==> Loading Node environment"
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+echo "==> Set production environment variables"
+export NODE_ENV=production
+export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
+export MEDUSA_ADMIN_BACKEND_URL="https://admin.zdacomm.com"
+export ADMIN_CORS="https://admin.zdacomm.com"
+export STORE_CORS="https://store.zdacomm.com"
+export BACKEND_URL="https://admin.zdacomm.com"
 
-            node -v
-            npm -v
+echo "==> Build Medusa"
+NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
 
-            echo "==> Enable Corepack & Yarn"
-            corepack enable
-            corepack prepare yarn@4.6.0 --activate
-            yarn -v
+echo "==> Verify admin build"
+if [ ! -f ".medusa/server/public/admin/index.html" ]; then
+  echo "❌ Admin build missing"
+  exit 1
+fi
+echo "✓ Admin build exists"
 
-            echo "==> Clean old dependencies & builds"
-            rm -rf node_modules
-            rm -rf .medusa
+echo "==> Run database migrations"
+npx medusa db:migrate || true
 
-            echo "==> Install dependencies"
-            yarn install --immutable || yarn install
+echo "==> Restart Medusa with PM2"
+pm2 stop medusa-backend || true
+pm2 delete medusa-backend || true
 
-            echo "==> Set production environment variables"
-            export NODE_ENV=production
-            export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
-            export MEDUSA_ADMIN_BACKEND_URL="https://admin.zdacomm.com"
-            export ADMIN_CORS="https://admin.zdacomm.com"
-            export STORE_CORS="https://store.zdacomm.com"
-            export BACKEND_URL="https://admin.zdacomm.com"
+pm2 start "npx medusa start" \
+  --name medusa-backend \
+  --cwd .medusa/server \
+  --env production
 
-            echo "==> Build Medusa (admin + backend)"
-            NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
+pm2 save
 
-            echo "==> Verify admin build"
-            if [ ! -f ".medusa/server/public/admin/index.html" ]; then
-              echo "❌ Admin build missing: .medusa/server/public/admin/index.html"
-              exit 1
-            fi
-            echo "✓ Admin build exists"
-
-            echo "==> Run database migrations"
-            npx medusa db:migrate || true
-
-            echo "==> Restart Medusa with PM2"
-            pm2 stop medusa-backend || true
-            pm2 delete medusa-backend || true
-
-            pm2 start "npx medusa start" \
-              --name medusa-backend \
-              --cwd .medusa/server \
-              --env production
-
-            pm2 save
-
-            echo "🚀 Deployment completed successfully"
+echo "🚀 Deployment completed successfully"
