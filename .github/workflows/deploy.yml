@@ -1,55 +1,92 @@
-set -e
+name: Deploy Backend to EC2 (Medusa v2 Production)
 
-APP_PATH="${{ secrets.APP_PATH }}"
-cd "$APP_PATH"
+on:
+  push:
+    branches: ["main"]
 
-echo "==> Loading Node environment"
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-node -v
-npm -v
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-echo "==> Ensure Yarn exists"
-yarn -v || npm install -g yarn@1.22.22
+      - name: Upload code to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          source: "."
+          target: ${{ secrets.APP_PATH }}
+          rm: false
 
-echo "==> Clean old builds"
-rm -rf node_modules
-rm -rf .medusa
+      - name: Install, Build & Restart Medusa on EC2
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            set -e
 
-echo "==> Install dependencies"
-yarn install
+            APP_PATH="${{ secrets.APP_PATH }}"
+            cd "$APP_PATH"
 
-echo "==> Set production environment variables"
-export NODE_ENV=production
-export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
-export MEDUSA_ADMIN_BACKEND_URL="https://admin.zdacomm.com"
-export ADMIN_CORS="https://admin.zdacomm.com"
-export STORE_CORS="https://store.zdacomm.com"
-export BACKEND_URL="https://admin.zdacomm.com"
+            echo "==> Load Node environment"
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-echo "==> Build Medusa"
-NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
+            node -v
+            npm -v
 
-echo "==> Verify admin build"
-if [ ! -f ".medusa/server/public/admin/index.html" ]; then
-  echo "❌ Admin build missing"
-  exit 1
-fi
-echo "✓ Admin build exists"
+            echo "==> Setup Corepack (user-space only)"
+            export COREPACK_HOME="$HOME/.corepack"
+            mkdir -p "$COREPACK_HOME"
+            corepack prepare yarn@4.6.0 --activate
 
-echo "==> Run database migrations"
-npx medusa db:migrate || true
+            yarn -v
 
-echo "==> Restart Medusa with PM2"
-pm2 stop medusa-backend || true
-pm2 delete medusa-backend || true
+            echo "==> Clean previous builds"
+            rm -rf node_modules
+            rm -rf .medusa
 
-pm2 start "npx medusa start" \
-  --name medusa-backend \
-  --cwd .medusa/server \
-  --env production
+            echo "==> Install dependencies"
+            yarn install --immutable
 
-pm2 save
+            echo "==> Export production environment variables"
+            export NODE_ENV=production
+            export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
+            export MEDUSA_ADMIN_BACKEND_URL="https://admin.zdacomm.com"
+            export BACKEND_URL="https://admin.zdacomm.com"
+            export ADMIN_CORS="https://admin.zdacomm.com"
+            export STORE_CORS="https://store.zdacomm.com"
 
-echo "🚀 Deployment completed successfully"
+            echo "==> Build Medusa (admin + backend)"
+            NODE_OPTIONS="--max-old-space-size=4096" npx medusa build
+
+            echo "==> Verify admin build"
+            if [ ! -f ".medusa/server/public/admin/index.html" ]; then
+              echo "❌ Admin index.html not found"
+              exit 1
+            fi
+            echo "✓ Admin build exists"
+
+            echo "==> Run database migrations"
+            npx medusa db:migrate || true
+
+            echo "==> Restart Medusa with PM2"
+            pm2 stop medusa-backend || true
+            pm2 delete medusa-backend || true
+
+            pm2 start "npx medusa start" \
+              --name medusa-backend \
+              --cwd .medusa/server \
+              --env production
+
+            pm2 save
+
+            echo "🚀 Deployment completed successfully"
