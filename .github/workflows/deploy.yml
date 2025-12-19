@@ -53,18 +53,27 @@ jobs:
             mkdir -p static
             chmod -R 755 static
 
-            # Node + Yarn setup
+            # Node setup
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-            # Use yarn directly if available, otherwise try corepack
+            # Install yarn via npm (skip corepack completely)
             if ! command -v yarn &> /dev/null; then
-              corepack enable || true
-              corepack prepare yarn@4.6.0 --activate || true
+              echo "Installing yarn via npm..."
+              npm install -g yarn
+            fi
+
+            # Verify yarn is available, fallback to npm if not
+            if command -v yarn &> /dev/null; then
+              echo "✓ Using yarn"
+              INSTALL_CMD="yarn install"
+            else
+              echo "⚠️  Yarn not available, using npm"
+              INSTALL_CMD="npm install"
             fi
 
             echo "Installing dependencies..."
-            yarn install
+            $INSTALL_CMD
 
             echo "Building application..."
             npx medusa build
