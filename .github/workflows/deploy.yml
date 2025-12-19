@@ -41,11 +41,10 @@ jobs:
             # Ensure static directory exists
             mkdir -p static
             chmod -R 755 static
-            echo "working"
 
-            # Node setup
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            echo "Checking if yarn is installed..."
+            echo $PATH
+            which yarn
 
             echo "Installing dependencies..."
             yarn install
