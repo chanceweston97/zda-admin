@@ -38,9 +38,33 @@ jobs:
             APP_PATH="${{ secrets.APP_PATH }}"
             cd "$APP_PATH"
 
-            # Ensure static directory exists
+            # Preserve existing static directory (contains uploaded product images)
+            # Backup static directory before deployment overwrites it
+            if [ -d "static" ] && [ "$(ls -A static 2>/dev/null)" ]; then
+              echo "Backing up existing static directory with uploaded files..."
+              BACKUP_DIR="static_backup_$(date +%Y%m%d_%H%M%S)"
+              mkdir -p "$BACKUP_DIR"
+              cp -r static/* "$BACKUP_DIR/" 2>/dev/null || true
+              echo "Static directory backed up to: $BACKUP_DIR ($(ls -1 "$BACKUP_DIR" | wc -l) files)"
+            else
+              BACKUP_DIR=""
+              echo "No existing static files to backup"
+            fi
+
+            # Ensure static directory exists (will be created/overwritten by SCP)
             mkdir -p static
             chmod -R 755 static
+
+            # Restore backed up static files (preserve uploaded images)
+            if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ] && [ "$(ls -A "$BACKUP_DIR" 2>/dev/null)" ]; then
+              echo "Restoring uploaded files from backup..."
+              # Copy files from backup back to static directory
+              cp -r "$BACKUP_DIR"/* static/ 2>/dev/null || true
+              echo "Static files restored ($(ls -1 static 2>/dev/null | wc -l) files in static directory)"
+              # Clean up backup after restoring
+              rm -rf "$BACKUP_DIR"
+              echo "Backup cleaned up"
+            fi
 
             # Load shell environment (for yarn/node paths)
             export NVM_DIR="$HOME/.nvm"
