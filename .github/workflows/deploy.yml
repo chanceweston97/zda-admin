@@ -41,6 +41,7 @@ jobs:
             # Ensure static directory exists
             mkdir -p static
             chmod -R 755 static
+            echo "working"
 
             # Node setup
             export NVM_DIR="$HOME/.nvm"
