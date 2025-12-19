@@ -62,6 +62,13 @@ jobs:
             echo "Yarn path: $(which yarn || echo 'not found')"
             yarn install
 
+            # Set environment variables before build (admin frontend reads these during build)
+            export NODE_ENV=production
+            export MEDUSA_ADMIN_URL="https://admin.zdacomm.com"
+            export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
+            export BACKEND_URL="https://admin.zdacomm.com"
+            export NEXT_PUBLIC_MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
+
             echo "Building application..."
             npx medusa build
 
