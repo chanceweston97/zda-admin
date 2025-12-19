@@ -42,9 +42,24 @@ jobs:
             mkdir -p static
             chmod -R 755 static
 
+            # Load shell environment (for yarn/node paths)
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            [ -s "$HOME/.bashrc" ] && . "$HOME/.bashrc" || true
+            [ -s "$HOME/.profile" ] && . "$HOME/.profile" || true
+
+            # Ensure yarn is in PATH
+            if ! command -v yarn &> /dev/null; then
+              # Try common yarn locations
+              if [ -f "$HOME/.yarn/bin/yarn" ]; then
+                export PATH="$HOME/.yarn/bin:$PATH"
+              elif [ -f "/usr/local/bin/yarn" ]; then
+                export PATH="/usr/local/bin:$PATH"
+              fi
+            fi
+
             echo "Installing dependencies..."
-            cd "$APP_PATH"
-            echo "PATH: $APP_PATH"
+            echo "Yarn path: $(which yarn || echo 'not found')"
             yarn install
 
             echo "Building application..."
