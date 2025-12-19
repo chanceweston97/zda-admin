@@ -1,5 +1,3 @@
-import nodemailer from "nodemailer";
-
 type EmailPayload = {
   to: string | string[];
   subject: string;
@@ -7,107 +5,185 @@ type EmailPayload = {
   replyTo?: string;
 };
 
-// PrivateEmail.com SMTP configuration
-const smtpOptions = {
-  host: process.env.EMAIL_SERVER_HOST || "mail.privateemail.com",
-  port: parseInt(process.env.EMAIL_SERVER_PORT || "587"),
-  secure: process.env.EMAIL_SERVER_PORT === "465", // true for 465 (SSL), false for 587 (TLS)
-  auth: {
-    user: process.env.EMAIL_SERVER_USER, // Your full PrivateEmail.com email address
-    pass: process.env.EMAIL_SERVER_PASSWORD, // Your PrivateEmail.com account password
-  },
-  // Additional options for PrivateEmail.com
-  tls: {
-    // Do not fail on invalid certificates (some servers have self-signed certs)
-    rejectUnauthorized: false,
-  },
-};
+// Cache for Microsoft Graph API access token to avoid requesting a new one for every email
+let cachedAccessToken: string | null = null;
+let tokenExpiry: number = 0;
 
+/**
+ * Get Microsoft Graph API access token using OAuth2 client credentials flow
+ */
+async function getAccessToken(): Promise<string> {
+  // Check if we have a valid cached token
+  if (cachedAccessToken && Date.now() < tokenExpiry) {
+    return cachedAccessToken;
+  }
+
+  // Validate required environment variables
+  if (!process.env.AZURE_CLIENT_ID || !process.env.AZURE_TENANT_ID || !process.env.AZURE_CLIENT_SECRET) {
+    throw new Error(
+      "Microsoft Graph API credentials are not configured. Please set AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_CLIENT_SECRET environment variables."
+    );
+  }
+
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
+  try {
+    const response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: "https://graph.microsoft.com/.default",
+        grant_type: "client_credentials",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Failed to get access token:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+      });
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`);
+    }
+
+    const tokenData = await response.json();
+
+    if (!tokenData.access_token) {
+      throw new Error("Access token not found in response");
+    }
+
+    // Cache the token (expires in ~3600 seconds, cache for 3500 to be safe)
+    const accessToken = tokenData.access_token as string;
+    cachedAccessToken = accessToken;
+    tokenExpiry = Date.now() + ((tokenData.expires_in || 3600) - 100) * 1000; // Subtract 100 seconds for safety
+
+    console.log("✅ Microsoft Graph API access token obtained");
+    return accessToken;
+  } catch (error: any) {
+    console.error("❌ Error getting access token:", error);
+    throw new Error(`Failed to authenticate with Microsoft Graph API: ${error.message}`);
+  }
+}
+
+/**
+ * Send email using Microsoft Graph API
+ */
 export const sendEmail = async (data: EmailPayload) => {
-  // Validate email configuration
-  if (!process.env.EMAIL_SERVER_USER || !process.env.EMAIL_SERVER_PASSWORD) {
-    console.error("❌ Email server credentials are not configured. Please set EMAIL_SERVER_USER and EMAIL_SERVER_PASSWORD environment variables.");
-    return null; // Don't throw error, just log and return null
+  // Validate Microsoft Graph API configuration
+  if (!process.env.AZURE_CLIENT_ID || !process.env.AZURE_TENANT_ID || !process.env.AZURE_CLIENT_SECRET) {
+    console.error("❌ Microsoft Graph API credentials are not configured. Please set AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_CLIENT_SECRET environment variables.");
+    return null; // Don't throw error, just log and return null (to match previous behavior)
+  }
+
+  // Get the email address to send from (e.g., sales@zdacomm.com)
+  const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER;
+  if (!fromEmail) {
+    console.error("❌ EMAIL_FROM or EMAIL_SERVER_USER must be set to specify the sender email address.");
+    return null;
   }
 
   // Log configuration (without sensitive data)
-  console.log("📧 PrivateEmail.com SMTP Configuration:", {
-    host: smtpOptions.host,
-    port: smtpOptions.port,
-    secure: smtpOptions.secure ? "SSL (465)" : "TLS (587)",
-    user: process.env.EMAIL_SERVER_USER,
-    from: process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER,
-    hasPassword: !!process.env.EMAIL_SERVER_PASSWORD,
-    server: "PrivateEmail.com",
+  console.log("📧 Microsoft Graph API Email Configuration:", {
+    tenantId: process.env.AZURE_TENANT_ID,
+    clientId: process.env.AZURE_CLIENT_ID,
+    fromEmail: fromEmail,
+    hasClientSecret: !!process.env.AZURE_CLIENT_SECRET,
+    server: "Microsoft Graph API",
   });
 
-  const transporter = nodemailer.createTransport({
-    ...smtpOptions,
-    // Add additional options for better error reporting
-    debug: process.env.NODE_ENV === "development",
-    logger: process.env.NODE_ENV === "development",
-  });
-
-  // Verify connection before sending
   try {
-    await transporter.verify();
-    console.log("✓ SMTP server connection verified");
-  } catch (verifyError: any) {
-    console.error("✗ SMTP server connection failed:", {
-      error: verifyError.message,
-      code: verifyError.code,
-      command: verifyError.command,
-      response: verifyError.response,
+    // Get access token
+    const accessToken = await getAccessToken();
+
+    // Convert recipients to array if needed
+    const recipients = Array.isArray(data.to) ? data.to : [data.to];
+
+    // Prepare email message for Microsoft Graph API
+    const message = {
+      message: {
+        subject: data.subject,
+        body: {
+          contentType: "HTML",
+          content: data.html,
+        },
+        toRecipients: recipients.map((email) => ({
+          emailAddress: {
+            address: email.trim(),
+          },
+        })),
+        ...(data.replyTo && {
+          replyTo: [
+            {
+              emailAddress: {
+                address: data.replyTo,
+              },
+            },
+          ],
+        }),
+      },
+    };
+
+    // Send email using Microsoft Graph API
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromEmail)}/sendMail`;
+
+    const response = await fetch(graphUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(message),
     });
-    // Don't throw - just log the error
-    return null;
-  }
 
-  try {
-    // PrivateEmail.com requires the "From" address to match the authenticated user
-    const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER;
-    
-    if (fromAddress !== process.env.EMAIL_SERVER_USER) {
-      console.warn("⚠️ Warning: EMAIL_FROM doesn't match EMAIL_SERVER_USER. PrivateEmail.com may reject emails if they don't match.");
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { message: errorText || "Unknown error" };
+      }
+
+      console.error("❌ Failed to send email via Microsoft Graph API:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData,
+      });
+
+      // Return null instead of throwing (to match previous behavior)
+      return null;
     }
 
-    const result = await transporter.sendMail({
-      from: fromAddress,
-      to: Array.isArray(data.to) ? data.to.join(", ") : data.to,
-      replyTo: data.replyTo,
+    // Microsoft Graph API returns 202 Accepted on success (no body)
+    console.log("✅ Email sent successfully via Microsoft Graph API:", {
+      from: fromEmail,
+      to: recipients,
       subject: data.subject,
-      html: data.html,
     });
 
-    console.log("✅ Email sent successfully:", {
-      messageId: result.messageId,
-      accepted: result.accepted || [],
-      rejected: result.rejected || [],
-      response: result.response,
-    });
-
-    // Warn if email was rejected
-    if (result.rejected && result.rejected.length > 0) {
-      console.error("⚠️ Some email addresses were rejected:", result.rejected);
-    }
-
-    return result;
-  } catch (sendError: any) {
+    // Return a result object similar to nodemailer format for compatibility
+    return {
+      messageId: `graph-${Date.now()}`,
+      accepted: recipients,
+      rejected: [],
+      pending: [],
+      response: `202 Accepted - Email sent via Microsoft Graph API`,
+    };
+  } catch (error: any) {
     console.error("❌ Email send failed:", {
-      error: sendError.message,
-      code: sendError.code,
-      command: sendError.command,
-      response: sendError.response,
-      responseCode: sendError.responseCode,
+      error: error.message,
+      stack: process.env.NODE_ENV !== "production" ? error.stack : undefined,
     });
-    // Don't throw - just log the error
+    // Return null instead of throwing (to match previous behavior)
     return null;
   }
 };
-
-
-
-
-
-
-

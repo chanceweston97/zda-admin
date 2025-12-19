@@ -34,9 +34,9 @@ export async function POST(
       return
     }
 
-    // Check email configuration
-    if (!process.env.EMAIL_SERVER_USER || !process.env.EMAIL_SERVER_PASSWORD) {
-      console.error("❌ Email configuration missing")
+    // Check Microsoft Graph API configuration
+    if (!process.env.AZURE_CLIENT_ID || !process.env.AZURE_TENANT_ID || !process.env.AZURE_CLIENT_SECRET) {
+      console.error("❌ Microsoft Graph API configuration missing")
       res.status(500).json({
         message: "Email server is not configured. Please contact administrator."
       })
@@ -44,7 +44,14 @@ export async function POST(
     }
 
     // Get recipient email from environment
-    const recipientEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_SERVER_USER
+    const recipientEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER
+    if (!recipientEmail) {
+      console.error("❌ No recipient email configured")
+      res.status(500).json({
+        message: "Email recipient is not configured. Please contact administrator."
+      })
+      return
+    }
 
     // Escape HTML to prevent XSS attacks
     const escapeHtml = (text: string) => {

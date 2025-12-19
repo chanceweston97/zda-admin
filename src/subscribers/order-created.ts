@@ -244,23 +244,22 @@ export default async function orderCreatedHandler({
 
     console.log(`📧 Preparing to send email to ${adminEmails.length} admin(s):`, adminEmails);
 
-    // Check email configuration
+    // Check Microsoft Graph API configuration
     const emailConfig = {
-      host: process.env.EMAIL_SERVER_HOST,
-      port: process.env.EMAIL_SERVER_PORT,
-      user: process.env.EMAIL_SERVER_USER,
-      hasPassword: !!process.env.EMAIL_SERVER_PASSWORD,
+      tenantId: process.env.AZURE_TENANT_ID,
+      clientId: process.env.AZURE_CLIENT_ID,
+      hasClientSecret: !!process.env.AZURE_CLIENT_SECRET,
       from: process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER,
     };
 
-    console.log("📧 Email configuration:", {
+    console.log("📧 Microsoft Graph API Email configuration:", {
       ...emailConfig,
-      password: "***hidden***",
+      clientSecret: "***hidden***",
     });
 
-    if (!emailConfig.user || !process.env.EMAIL_SERVER_PASSWORD) {
-      console.error("❌ Email server credentials not configured!");
-      console.error("❌ Please set EMAIL_SERVER_USER and EMAIL_SERVER_PASSWORD in your .env file");
+    if (!process.env.AZURE_CLIENT_ID || !process.env.AZURE_TENANT_ID || !process.env.AZURE_CLIENT_SECRET) {
+      console.error("❌ Microsoft Graph API credentials not configured!");
+      console.error("❌ Please set AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_CLIENT_SECRET in your .env file");
       return;
     }
 
