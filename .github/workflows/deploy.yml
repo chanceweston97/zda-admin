@@ -65,13 +65,17 @@ jobs:
             echo "Building application..."
             npx medusa build
 
-            # Environment variables
-            export NODE_ENV=production
-            export MEDUSA_ADMIN_URL="https://admin.zdacomm.com"
-            export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
-            export BACKEND_URL="https://admin.zdacomm.com"
-            export ADMIN_CORS="https://admin.zdacomm.com"
-            export STORE_CORS="https://store.zdacomm.com"
+            # Create .env file in .medusa/server directory
+            echo "Creating .env file..."
+            mkdir -p "$APP_PATH/.medusa/server"
+            cat > "$APP_PATH/.medusa/server/.env" << EOF
+              NODE_ENV=production
+              MEDUSA_ADMIN_URL=https://admin.zdacomm.com
+              MEDUSA_BACKEND_URL=https://admin.zdacomm.com
+              BACKEND_URL=https://admin.zdacomm.com
+              ADMIN_CORS=https://admin.zdacomm.com
+              STORE_CORS=https://store.zdacomm.com
+              EOF
 
             # Run database migrations
             echo "Running database migrations..."
