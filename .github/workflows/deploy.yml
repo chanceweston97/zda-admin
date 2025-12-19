@@ -74,8 +74,11 @@ jobs:
             MEDUSA_ADMIN_URL=https://admin.zdacomm.com
             MEDUSA_BACKEND_URL=https://admin.zdacomm.com
             BACKEND_URL=https://admin.zdacomm.com
-            ADMIN_CORS=https://admin.zdacomm.com
+            ADMIN_CORS=https://admin.zdacomm.com,http://18.224.229.214:9000
             STORE_CORS=https://store.zdacomm.com
+            DATABASE_URL=postgresql://medusa123:medusa123@127.0.0.1:5432/medusa123
+            AUTH_CORS=https://admin.zdacomm.com,http://18.224.229.214:9000
+            NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.zdacomm.com
             EOF
 
             # Run database migrations
