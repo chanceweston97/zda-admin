@@ -44,7 +44,7 @@ jobs:
 
             echo "Installing dependencies..."
             cd "$APP_PATH"
-            echo "PATH: $PATH"
+            echo "PATH: $APP_PATH"
             yarn install
 
             echo "Building application..."
