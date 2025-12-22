@@ -45,6 +45,34 @@ export async function POST(
       });
     }
 
+    // Check email service configuration before attempting to send
+    const hasAzureConfig = !!(process.env.AZURE_CLIENT_ID && process.env.AZURE_TENANT_ID && process.env.AZURE_CLIENT_SECRET);
+    const hasEmailFrom = !!(process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER);
+    
+    if (!hasAzureConfig) {
+      console.error("❌ Microsoft Graph API credentials are missing");
+      return res.status(500).json({
+        message: "Email service is not configured. Please contact support directly.",
+        emailStatus: {
+          sent: false,
+          error: "Azure credentials (AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET) are not configured",
+          configured: false,
+        },
+      });
+    }
+
+    if (!hasEmailFrom) {
+      console.error("❌ EMAIL_FROM or EMAIL_SERVER_USER is not configured");
+      return res.status(500).json({
+        message: "Email service is not configured. Please contact support directly.",
+        emailStatus: {
+          sent: false,
+          error: "EMAIL_FROM or EMAIL_SERVER_USER environment variable is not set",
+          configured: false,
+        },
+      });
+    }
+
     let emailSent = false;
     let emailError: any = null;
 
@@ -96,7 +124,14 @@ export async function POST(
       } else if (emailResult) {
         emailSent = true;
       } else {
-        emailError = "Email service returned null";
+        // More specific error message
+        if (!hasAzureConfig) {
+          emailError = "Azure credentials are missing. Check AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_CLIENT_SECRET.";
+        } else if (!hasEmailFrom) {
+          emailError = "EMAIL_FROM or EMAIL_SERVER_USER is not set.";
+        } else {
+          emailError = "Email service failed. Check backend logs for details.";
+        }
       }
     } catch (err: any) {
       emailError = err;
@@ -108,7 +143,7 @@ export async function POST(
       emailStatus: {
         sent: emailSent,
         error: emailError ? (emailError.message || String(emailError)) : null,
-        configured: !!(process.env.AZURE_CLIENT_ID && process.env.AZURE_TENANT_ID && process.env.AZURE_CLIENT_SECRET),
+        configured: hasAzureConfig && hasEmailFrom,
       },
     };
 

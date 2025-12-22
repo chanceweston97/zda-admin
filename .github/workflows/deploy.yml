@@ -83,6 +83,8 @@ jobs:
             ADMIN_CORS=https://admin.zdacomm.com,http://localhost:8000
             STORE_CORS=https://store.zdacomm.com,http://localhost:8000
             AUTH_CORS=https://admin.zdacomm.com,http://localhost:8000
+            EMAIL_FROM=sales@zdacomm.com  
+            ADMIN_EMAIL=chanceweston97@gmail.com 
             EOF
 
             echo "== Run DB migrations =="
