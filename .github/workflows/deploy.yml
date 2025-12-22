@@ -60,6 +60,28 @@ jobs:
             echo "== Install dependencies =="
             yarn install
 
+            echo "== Check for .env file at APP_PATH root =="
+            if [ ! -f .env ]; then
+              echo "⚠️  WARNING: .env file not found at $APP_PATH/.env"
+              echo "Please create the .env file manually on the server at the root of your app directory"
+              echo "Required environment variables:"
+              echo "  - NODE_ENV"
+              echo "  - MEDUSA_BACKEND_URL"
+              echo "  - MEDUSA_ADMIN_URL"
+              echo "  - DATABASE_URL"
+              echo "  - ADMIN_CORS"
+              echo "  - STORE_CORS"
+              echo "  - AUTH_CORS"
+              echo "  - EMAIL_FROM"
+              echo "  - ADMIN_EMAIL"
+              echo "  - AZURE_CLIENT_ID"
+              echo "  - AZURE_TENANT_ID"
+              echo "  - AZURE_CLIENT_SECRET"
+              echo "Create it at: $APP_PATH/.env"
+            else
+              echo "✅ .env file exists at root - will copy to .medusa/server/.env after build"
+            fi
+
             echo "== Build Medusa (this recreates .medusa/server) =="
             export NODE_ENV=production
             export MEDUSA_BACKEND_URL=https://admin.zdacomm.com
@@ -74,22 +96,13 @@ jobs:
             echo "== Verify static symlink =="
             ls -la .medusa/server | grep static
 
-            echo "== Create runtime .env =="
-            cat > .medusa/server/.env <<EOF
-            NODE_ENV=production
-            MEDUSA_BACKEND_URL=https://admin.zdacomm.com
-            MEDUSA_ADMIN_URL=https://admin.zdacomm.com
-            DATABASE_URL=postgresql://medusa123:medusa123@127.0.0.1:5432/medusa123
-            ADMIN_CORS=https://admin.zdacomm.com,http://localhost:8000
-            STORE_CORS=https://store.zdacomm.com,http://localhost:8000
-            AUTH_CORS=https://admin.zdacomm.com,http://localhost:8000
-            EMAIL_FROM=sales@zdacomm.com  
-            ADMIN_EMAIL=chanceweston97@gmail.com 
-            AZURE_CLIENT_ID=39ae7f4e-784a-4870-aa94-ef374e073a37
-            AZURE_TENANT_ID=7036b38a-f203-43b5-97cf-f1fe467b7b6f
-            AZURE_CLIENT_SECRET=c949ce99-89c5-4997-aa76-d9fa7d74ab33
-            EOF
-
+            echo "== Copy .env file from root to .medusa/server/.env =="
+            if [ -f .env ]; then
+              cp .env .medusa/server/.env
+              echo "✅ Copied .env file from root to .medusa/server/.env"
+            else
+              echo "⚠️  WARNING: .env file not found at root, .medusa/server/.env will not be created"
+            fi
             echo "== Run DB migrations =="
             npx medusa db:migrate || true
 
