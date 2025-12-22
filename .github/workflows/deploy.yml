@@ -12,8 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 🚫 Upload code EXCEPT static
-      - name: Upload code to EC2 (exclude static)
+      - name: Upload code to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -21,11 +20,8 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           source: "."
           target: ${{ secrets.APP_PATH }}
+          strip_components: 0
           rm: false
-          exclude: |
-            static
-            node_modules
-            .git
 
       - name: Install, build, and restart on EC2
         uses: appleboy/ssh-action@v0.1.7
@@ -47,17 +43,31 @@ jobs:
             sudo chmod -R 755 "$MEDIA_DIR"
 
             echo "== Force static symlink (critical) =="
-            rm -rf static
+            # Remove static if it exists (could be directory or symlink)
+            rm -rf static 2>/dev/null || true
+            # Create symlink to external media directory
             ln -s "$MEDIA_DIR" static
-
-            ls -la | grep static
+            # Verify symlink was created
+            ls -la static || echo "Warning: static symlink check failed"
 
             echo "== Load Node environment =="
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            [ -s "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+            [ -s "$HOME/.bashrc" ] && . "$HOME/.bashrc" || true
+            [ -s "$HOME/.profile" ] && . "$HOME/.profile" || true
+
+            # Ensure yarn is in PATH
+            if ! command -v yarn &> /dev/null; then
+              # Try common yarn locations
+              if [ -f "$HOME/.yarn/bin/yarn" ]; then
+                export PATH="$HOME/.yarn/bin:$PATH"
+              elif [ -f "/usr/local/bin/yarn" ]; then
+                export PATH="/usr/local/bin:$PATH"
+              fi
+            fi
 
             echo "== Install dependencies =="
+            echo "Yarn path: $(which yarn || echo 'not found')"
             yarn install --production=false
 
             echo "== Build Medusa =="
