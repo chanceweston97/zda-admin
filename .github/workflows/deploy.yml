@@ -1,4 +1,4 @@
-name: Deploy Backend to EC2 (Medusa Production)
+name: Deploy Backend to EC2 (Medusa v2 Production – SAFE MEDIA)
 
 on:
   push:
@@ -20,11 +20,10 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           source: "."
           target: ${{ secrets.APP_PATH }}
-          strip_components: 0
           rm: false
           overwrite: true
 
-      - name: Install, build, and restart on EC2
+      - name: Build & Restart Medusa on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -36,53 +35,21 @@ jobs:
             APP_PATH="${{ secrets.APP_PATH }}"
             MEDIA_DIR="/var/medusa-media"
 
+            echo "== Go to app directory =="
             cd "$APP_PATH"
 
-            echo "== Verify code upload =="
-            echo "Current directory: $(pwd)"
-            echo "Code files present:"
-            ls -la | head -15
-
-            echo "== Clean up deleted files =="
-            # Remove files that were deleted from the repo but still exist on server
-            # SCP with rm:false doesn't delete files, so we need to clean them up explicitly
-            # Remove documentation files that are no longer in the repository
-            rm -f \
-              SETUP_EXTERNAL_UPLOADS.md \
-              EXTERNAL_UPLOADS_QUICK_START.md \
-              HOW_IT_WORKS.md \
-              CMS_BACKEND_SETUP.md \
-              CMS_QUICK_START.md \
-              DEPLOYMENT_FIX.md \
-              VERIFY_BUILD.md \
-              2>/dev/null || true
-            # Also remove any other .md files in root that aren't README.md
-            # (keeps README.md but removes other docs that might have been deleted)
-            find . -maxdepth 1 -name "*.md" ! -name "README.md" -type f -delete 2>/dev/null || true
-            echo "✓ Cleanup complete - removed old documentation files"
-
-            echo "== Ensure media directory exists =="
+            echo "== Ensure persistent media directory exists =="
             sudo mkdir -p "$MEDIA_DIR"
             sudo chown -R ubuntu:ubuntu "$MEDIA_DIR"
             sudo chmod -R 755 "$MEDIA_DIR"
 
-            echo "== Force static symlink (critical) =="
-            # Remove static if it exists (could be directory or symlink)
-            rm -rf static 2>/dev/null || true
-            # Create symlink to external media directory
-            ln -s "$MEDIA_DIR" static
-            # Verify symlink was created
-            ls -la static || echo "Warning: static symlink check failed"
-
-            echo "== Load Node environment =="
+            echo "== Load Node / Yarn environment =="
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
             [ -s "$HOME/.bashrc" ] && . "$HOME/.bashrc" || true
             [ -s "$HOME/.profile" ] && . "$HOME/.profile" || true
 
-            # Ensure yarn is in PATH
             if ! command -v yarn &> /dev/null; then
-              # Try common yarn locations
               if [ -f "$HOME/.yarn/bin/yarn" ]; then
                 export PATH="$HOME/.yarn/bin:$PATH"
               elif [ -f "/usr/local/bin/yarn" ]; then
@@ -91,17 +58,23 @@ jobs:
             fi
 
             echo "== Install dependencies =="
-            echo "Yarn path: $(which yarn || echo 'not found')"
             yarn install
 
-            echo "== Build Medusa =="
+            echo "== Build Medusa (this recreates .medusa/server) =="
             export NODE_ENV=production
             export MEDUSA_BACKEND_URL=https://admin.zdacomm.com
             export MEDUSA_ADMIN_URL=https://admin.zdacomm.com
             npx medusa build
 
-            echo "== Create runtime env =="
+            echo "== CRITICAL: Fix static directory AFTER build =="
             mkdir -p .medusa/server
+            rm -rf .medusa/server/static
+            ln -s "$MEDIA_DIR" .medusa/server/static
+
+            echo "== Verify static symlink =="
+            ls -la .medusa/server | grep static
+
+            echo "== Create runtime .env =="
             cat > .medusa/server/.env <<EOF
             NODE_ENV=production
             MEDUSA_BACKEND_URL=https://admin.zdacomm.com
@@ -112,7 +85,7 @@ jobs:
             AUTH_CORS=https://admin.zdacomm.com
             EOF
 
-            echo "== Migrate DB =="
+            echo "== Run DB migrations =="
             npx medusa db:migrate || true
 
             echo "== Restart PM2 =="
@@ -120,4 +93,4 @@ jobs:
             pm2 start npx --name admin --cwd .medusa/server -- medusa start
             pm2 save
 
-            echo "✅ DEPLOY COMPLETE"
+            echo "✅ DEPLOY COMPLETE – MEDIA SAFE"
