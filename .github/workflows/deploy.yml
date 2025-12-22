@@ -85,6 +85,9 @@ jobs:
             AUTH_CORS=https://admin.zdacomm.com,http://localhost:8000
             EMAIL_FROM=sales@zdacomm.com  
             ADMIN_EMAIL=chanceweston97@gmail.com 
+            AZURE_CLIENT_ID=39ae7f4e-784a-4870-aa94-ef374e073a37
+            AZURE_TENANT_ID=7036b38a-f203-43b5-97cf-f1fe467b7b6f
+            AZURE_CLIENT_SECRET=c949ce99-89c5-4997-aa76-d9fa7d74ab33
             EOF
 
             echo "== Run DB migrations =="
