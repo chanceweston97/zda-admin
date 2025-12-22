@@ -11,10 +11,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Fetch all history for git operations
 
-      - name: Upload code to EC2
+      # 🚫 Upload code EXCEPT static
+      - name: Upload code to EC2 (exclude static)
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -22,10 +21,13 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           source: "."
           target: ${{ secrets.APP_PATH }}
-          strip_components: 0
           rm: false
+          exclude: |
+            static
+            node_modules
+            .git
 
-      - name: Install and restart on EC2
+      - name: Install, build, and restart on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -34,82 +36,54 @@ jobs:
           script: |
             set -e
 
-            # App directory
             APP_PATH="${{ secrets.APP_PATH }}"
+            MEDIA_DIR="/var/medusa-media"
+
             cd "$APP_PATH"
 
-            # Ensure external upload directory exists (outside build directory)
-            # This directory persists across deployments and never gets overwritten
-            UPLOAD_DIR="/var/www/medusa-uploads"
-            if [ ! -d "$UPLOAD_DIR" ]; then
-              echo "Creating external upload directory: $UPLOAD_DIR"
-              sudo mkdir -p "$UPLOAD_DIR"
-              sudo chown -R $(whoami):$(whoami) "$UPLOAD_DIR" 2>/dev/null || sudo chown -R $USER:$USER "$UPLOAD_DIR"
-              sudo chmod -R 755 "$UPLOAD_DIR"
-              echo "✓ External upload directory created and configured"
-            else
-              echo "✓ External upload directory already exists: $UPLOAD_DIR"
-              # Ensure permissions are correct
-              sudo chown -R $(whoami):$(whoami) "$UPLOAD_DIR" 2>/dev/null || sudo chown -R $USER:$USER "$UPLOAD_DIR"
-              sudo chmod -R 755 "$UPLOAD_DIR"
-            fi
+            echo "== Ensure media directory exists =="
+            sudo mkdir -p "$MEDIA_DIR"
+            sudo chown -R ubuntu:ubuntu "$MEDIA_DIR"
+            sudo chmod -R 755 "$MEDIA_DIR"
 
-            # Load shell environment (for yarn/node paths)
+            echo "== Force static symlink (critical) =="
+            rm -rf static
+            ln -s "$MEDIA_DIR" static
+
+            ls -la | grep static
+
+            echo "== Load Node environment =="
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            [ -s "$HOME/.bashrc" ] && . "$HOME/.bashrc" || true
-            [ -s "$HOME/.profile" ] && . "$HOME/.profile" || true
+            [ -s "$HOME/.bashrc" ] && . "$HOME/.bashrc"
 
-            # Ensure yarn is in PATH
-            if ! command -v yarn &> /dev/null; then
-              # Try common yarn locations
-              if [ -f "$HOME/.yarn/bin/yarn" ]; then
-                export PATH="$HOME/.yarn/bin:$PATH"
-              elif [ -f "/usr/local/bin/yarn" ]; then
-                export PATH="/usr/local/bin:$PATH"
-              fi
-            fi
+            echo "== Install dependencies =="
+            yarn install --production=false
 
-            echo "Installing dependencies..."
-            echo "Yarn path: $(which yarn || echo 'not found')"
-            yarn install
-
-            # Set environment variables before build (admin frontend reads these during build)
+            echo "== Build Medusa =="
             export NODE_ENV=production
-            export MEDUSA_ADMIN_URL="https://admin.zdacomm.com"
-            export MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
-            export BACKEND_URL="https://admin.zdacomm.com"
-            export NEXT_PUBLIC_MEDUSA_BACKEND_URL="https://admin.zdacomm.com"
-
-            echo "Building application..."
+            export MEDUSA_BACKEND_URL=https://admin.zdacomm.com
+            export MEDUSA_ADMIN_URL=https://admin.zdacomm.com
             npx medusa build
 
-            # Create .env file in .medusa/server directory
-            echo "Creating .env file..."
-            mkdir -p "$APP_PATH/.medusa/server"
-
-            cat > "$APP_PATH/.medusa/server/.env" <<EOF
+            echo "== Create runtime env =="
+            mkdir -p .medusa/server
+            cat > .medusa/server/.env <<EOF
             NODE_ENV=production
-            MEDUSA_ADMIN_URL=https://admin.zdacomm.com
             MEDUSA_BACKEND_URL=https://admin.zdacomm.com
-            BACKEND_URL=https://admin.zdacomm.com
+            MEDUSA_ADMIN_URL=https://admin.zdacomm.com
+            DATABASE_URL=postgresql://medusa123:medusa123@127.0.0.1:5432/medusa123
             ADMIN_CORS=https://admin.zdacomm.com
             STORE_CORS=https://store.zdacomm.com
-            DATABASE_URL=postgresql://medusa123:medusa123@127.0.0.1:5432/medusa123
             AUTH_CORS=https://admin.zdacomm.com
-            NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://admin.zdacomm.com
             EOF
 
-            # Run database migrations
-            echo "Running database migrations..."
-            npx medusa db:migrate || echo "Migration failed or already up to date"
+            echo "== Migrate DB =="
+            npx medusa db:migrate || true
 
-            # Restart app
-            echo "Restarting Admin Backend.."
-            pm2 stop admin || true
+            echo "== Restart PM2 =="
             pm2 delete admin || true
-            pm2 start npx --name admin --cwd "$APP_PATH/.medusa/server" -- medusa start
+            pm2 start npx --name admin --cwd .medusa/server -- medusa start
             pm2 save
 
-            echo "✓ Deployment complete"
-            echo "✓ Backend is running in production mode at https://admin.zdacomm.com"
+            echo "✅ DEPLOY COMPLETE"
