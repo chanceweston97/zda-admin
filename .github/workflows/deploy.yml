@@ -44,11 +44,14 @@ jobs:
             if [ ! -d "$UPLOAD_DIR" ]; then
               echo "Creating external upload directory: $UPLOAD_DIR"
               sudo mkdir -p "$UPLOAD_DIR"
-              sudo chown -R $USER:$USER "$UPLOAD_DIR"
+              sudo chown -R $(whoami):$(whoami) "$UPLOAD_DIR" 2>/dev/null || sudo chown -R $USER:$USER "$UPLOAD_DIR"
               sudo chmod -R 755 "$UPLOAD_DIR"
               echo "✓ External upload directory created and configured"
             else
               echo "✓ External upload directory already exists: $UPLOAD_DIR"
+              # Ensure permissions are correct
+              sudo chown -R $(whoami):$(whoami) "$UPLOAD_DIR" 2>/dev/null || sudo chown -R $USER:$USER "$UPLOAD_DIR"
+              sudo chmod -R 755 "$UPLOAD_DIR"
             fi
 
             # Load shell environment (for yarn/node paths)

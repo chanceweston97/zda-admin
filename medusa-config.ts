@@ -72,22 +72,10 @@ module.exports = defineConfig({
             resolve: "@medusajs/medusa/file-local",
             id: "local",
             options: {
-              // Use external directory that persists across deployments
-              // This directory MUST exist outside the build/runtime directory
-              // 
-              // IMPORTANT: 
-              // - In production: Always use /var/www/medusa-uploads (absolute path)
-              //   This directory is NEVER touched by medusa build or deployments
-              // - In development: Use ./static (relative to project root)
-              // 
-              // The environment variable MEDUSA_STATIC_DIR takes precedence if set
-              upload_dir: process.env.MEDUSA_STATIC_DIR || (
-                // In production (detected by NODE_ENV or presence of MEDUSA_ADMIN_URL), 
-                // ALWAYS use external absolute path that persists across builds
-                (process.env.NODE_ENV === 'production' || process.env.MEDUSA_ADMIN_URL)
-                  ? '/var/www/medusa-uploads' 
-                  : join(process.cwd(), 'static')
-              ),
+              // Use external directory in production (set via MEDUSA_STATIC_DIR env var)
+              // In production: /var/www/medusa-uploads (set in .medusa/server/.env)
+              // In development: static (relative path, works with yarn dev)
+              upload_dir: process.env.MEDUSA_STATIC_DIR || process.env.STATIC_DIR || "static",
               backend_url: getBackendUrl(),
             },
           },
