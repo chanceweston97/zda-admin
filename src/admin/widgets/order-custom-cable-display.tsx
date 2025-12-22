@@ -43,7 +43,7 @@ const OrderCustomCableDisplay = () => {
           const items = order?.items || []
           const customCableItems = items.filter((item: any) => {
             const metadata = item.metadata || {}
-            return metadata.isCustom === true || 
+            return metadata.isCustom === true ||
                    metadata.isCustomCable || 
                    metadata.customTitle || 
                    metadata.customCableCount > 0 ||
@@ -62,6 +62,22 @@ const OrderCustomCableDisplay = () => {
     // Hide default Summary and inject custom Summary
     useEffect(() => {
       if (!orderData || customItems.length === 0) return
+
+      // Helper function to get price for custom cable items from metadata (shared across all functions)
+      const getCustomCablePrice = (item: any): number => {
+        const metadata = item.metadata || {}
+        // Get price from metadata.price (in cents) or fallback to other fields
+        if (metadata.price) {
+          // Price is in cents, convert to dollars
+          return (typeof metadata.price === 'number' ? metadata.price : parseFloat(String(metadata.price))) / 100
+        } else if (metadata.unitCustomCablePriceDollars) {
+          return parseFloat(String(metadata.unitCustomCablePriceDollars)) || 0
+        } else if (metadata.unitCustomCablePrice) {
+          // Price is in cents, convert to dollars
+          return (typeof metadata.unitCustomCablePrice === 'number' ? metadata.unitCustomCablePrice : parseFloat(String(metadata.unitCustomCablePrice))) / 100
+        }
+        return 0
+      }
 
       // Find and hide the default Summary section
       const hideDefaultSummary = () => {
@@ -118,8 +134,7 @@ const OrderCustomCableDisplay = () => {
       const itemPriceMap = new Map<string, number>() // Map item ID to price
       
       customItems.forEach((item: any) => {
-        const metadata = item.metadata || {}
-        const price = parseFloat(metadata.unitCustomCablePriceDollars || '0')
+        const price = getCustomCablePrice(item)
         const quantity = item.quantity || 1
         itemSubtotal += price * quantity
         itemPriceMap.set(item.id, price)
@@ -260,24 +275,83 @@ const OrderCustomCableDisplay = () => {
       `
     }
 
-    // Helper function to get price for custom cable items
-    const getCustomCablePrice = (item: any): number => {
-      const metadata = item.metadata || {}
-      // Check if it's a custom cable
-      if (metadata.isCustom === true || metadata.isCustomCable || metadata.customTitle) {
-        // Get price from metadata.price (in cents) or fallback to other fields
-        if (metadata.price) {
-          // Price is in cents, convert to dollars
-          return (typeof metadata.price === 'number' ? metadata.price : parseFloat(String(metadata.price))) / 100
-        } else if (metadata.unitCustomCablePriceDollars) {
-          return parseFloat(String(metadata.unitCustomCablePriceDollars)) || 0
-        } else if (metadata.unitCustomCablePrice) {
-          // Price is in cents, convert to dollars
-          return (typeof metadata.unitCustomCablePrice === 'number' ? metadata.unitCustomCablePrice : parseFloat(String(metadata.unitCustomCablePrice))) / 100
+    // Update Payments section
+    const updatePaymentsSection = () => {
+      // Find "Payments" section by heading
+      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div[class*="Heading"]'))
+      let paymentsSection: HTMLElement | null = null
+      
+      for (const heading of headings) {
+        const text = heading.textContent?.trim().toLowerCase() || ''
+        if (text === 'payments') {
+          const container = heading.closest('div, section') as HTMLElement
+          if (container) {
+            paymentsSection = container
+            break
+          }
         }
       }
-      // For non-custom items, use unit_price (already in cents, convert to dollars)
-      return ((item.unit_price as number) || 0) / 100
+
+      if (!paymentsSection) return
+
+      // Calculate correct total based on custom cable prices
+      let totalAmount = 0
+      customItems.forEach((item: any) => {
+        const price = getCustomCablePrice(item)
+        const quantity = item.quantity || 1
+        totalAmount += price * quantity
+      })
+
+      // Add shipping, tax, etc. to get full order total
+      const shippingTotal = (orderData.shipping_total || 0) / 100
+      const taxTotal = (orderData.tax_total || 0) / 100
+      const discountTotal = (orderData.discount_total || 0) / 100
+      const orderTotal = totalAmount + shippingTotal + taxTotal - discountTotal
+
+      const formatPrice = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 2,
+        }).format(amount)
+      }
+
+      // Helper function to walk text nodes
+      const walkNodes = (node: Node, callback: (node: Node) => void) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          callback(node)
+        } else {
+          for (let child = node.firstChild; child; child = child.nextSibling) {
+            walkNodes(child, callback)
+          }
+        }
+      }
+
+      // Find and update "Total paid by customer" or similar text
+      const allElements = paymentsSection.querySelectorAll('*')
+      allElements.forEach((el) => {
+        const text = el.textContent || ''
+        // Look for "Total paid by customer" or "$0.00 USD" patterns
+        if (text.includes('Total paid') || text.includes('paid by customer') || (/\$0\.00/.test(text) && text.includes('USD'))) {
+          walkNodes(el, (textNode) => {
+            if (textNode.textContent) {
+              const nodeText = textNode.textContent
+              // Update $0.00 USD patterns
+              if (/\$0\.00\s*USD/.test(nodeText)) {
+                textNode.textContent = nodeText.replace(/\$0\.00\s*USD/g, `${formatPrice(orderTotal)} USD`)
+                if (textNode.parentElement) {
+                  textNode.parentElement.setAttribute('data-custom-price-updated', 'true')
+                }
+              } else if (/\$0\.00/.test(nodeText) && nodeText.includes('USD')) {
+                textNode.textContent = nodeText.replace(/\$0\.00/g, formatPrice(orderTotal))
+                if (textNode.parentElement) {
+                  textNode.parentElement.setAttribute('data-custom-price-updated', 'true')
+                }
+              }
+            }
+          })
+        }
+      })
     }
 
     // Update Unfulfilled Items section prices
@@ -348,86 +422,6 @@ const OrderCustomCableDisplay = () => {
               if (textNode.textContent.trim() === '$0.00' || textNode.textContent.includes('$0.00')) {
                 textNode.textContent = textNode.textContent.replace(/\$0\.00/g, formattedPrice)
                 // Mark parent element
-                if (textNode.parentElement) {
-                  textNode.parentElement.setAttribute('data-custom-price-updated', 'true')
-                }
-              }
-            }
-          })
-        }
-      })
-    }
-
-    // Update Payments section
-    const updatePaymentsSection = () => {
-      // Find "Payments" section by heading
-      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div[class*="Heading"]'))
-      let paymentsSection: HTMLElement | null = null
-      
-      for (const heading of headings) {
-        const text = heading.textContent?.trim().toLowerCase() || ''
-        if (text === 'payments') {
-          const container = heading.closest('div, section') as HTMLElement
-          if (container) {
-            paymentsSection = container
-            break
-          }
-        }
-      }
-
-      if (!paymentsSection) return
-
-      // Calculate correct total paid based on custom cable prices
-      let totalPaid = 0
-      customItems.forEach((item: any) => {
-        const price = getCustomCablePrice(item)
-        const quantity = item.quantity || 1
-        totalPaid += price * quantity
-      })
-
-      // Add shipping, tax, etc. to get full order total
-      const shippingTotal = (orderData.shipping_total || 0) / 100
-      const taxTotal = (orderData.tax_total || 0) / 100
-      const discountTotal = (orderData.discount_total || 0) / 100
-      const orderTotal = totalPaid + shippingTotal + taxTotal - discountTotal
-
-      const formatPrice = (amount: number) => {
-        return new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          minimumFractionDigits: 2,
-        }).format(amount)
-      }
-
-      // Helper function to walk text nodes
-      const walkNodes = (node: Node, callback: (node: Node) => void) => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          callback(node)
-        } else {
-          for (let child = node.firstChild; child; child = child.nextSibling) {
-            walkNodes(child, callback)
-          }
-        }
-      }
-
-      // Find and update "Total paid by customer" or similar text
-      const allElements = paymentsSection.querySelectorAll('*')
-      allElements.forEach((el) => {
-        const text = el.textContent || ''
-        // Look for "Total paid by customer" or "$0.00 USD" patterns
-        if (text.includes('Total paid') || text.includes('paid by customer') || (/\$0\.00/.test(text) && text.includes('USD'))) {
-          // Try to find and update price values
-          walkNodes(el, (textNode) => {
-            if (textNode.textContent) {
-              const nodeText = textNode.textContent
-              // Update $0.00 USD patterns
-              if (/\$0\.00\s*USD/.test(nodeText)) {
-                textNode.textContent = nodeText.replace(/\$0\.00\s*USD/g, `${formatPrice(orderTotal)} USD`)
-                if (textNode.parentElement) {
-                  textNode.parentElement.setAttribute('data-custom-price-updated', 'true')
-                }
-              } else if (/\$0\.00/.test(nodeText) && nodeText.includes('USD')) {
-                textNode.textContent = nodeText.replace(/\$0\.00/g, formatPrice(orderTotal))
                 if (textNode.parentElement) {
                   textNode.parentElement.setAttribute('data-custom-price-updated', 'true')
                 }
