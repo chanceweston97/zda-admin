@@ -149,9 +149,16 @@ export async function POST(
 
     return res.status(201).json(responseData);
   } catch (error: any) {
-    console.error("Contact form error:", error);
+    console.error("❌ Contact form error:", error);
+    console.error("Error stack:", error.stack);
     return res.status(500).json({
       message: error.message || "Failed to submit contact form. Please try again.",
+      error: process.env.NODE_ENV !== "production" ? error.message : undefined,
+      emailStatus: {
+        sent: false,
+        error: error.message || "Unknown error occurred",
+        configured: !!(process.env.AZURE_CLIENT_ID && process.env.AZURE_TENANT_ID && process.env.AZURE_CLIENT_SECRET && (process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER)),
+      },
     });
   }
 }
