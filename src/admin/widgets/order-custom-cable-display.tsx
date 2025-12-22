@@ -105,25 +105,6 @@ const OrderCustomCableDisplay = () => {
         }
       }
 
-    // Helper function to get price from metadata.price (in cents) or fallback (shared across all functions)
-    const getCustomCablePrice = (item: any): number => {
-        const metadata = item.metadata || {}
-        // Get price from metadata.price (in cents) or fallback to other fields
-        if (metadata.price) {
-          // Price is in cents, convert to dollars
-          const priceValue = typeof metadata.price === 'number' ? metadata.price : parseFloat(String(metadata.price))
-          return priceValue / 100
-        } else if (metadata.unitCustomCablePriceDollars) {
-          const priceStr = String(metadata.unitCustomCablePriceDollars)
-          return parseFloat(priceStr) || 0
-        } else if (metadata.unitCustomCablePrice) {
-          // Price is in cents, convert to dollars
-          const priceValue = typeof metadata.unitCustomCablePrice === 'number' ? metadata.unitCustomCablePrice : parseFloat(String(metadata.unitCustomCablePrice))
-          return priceValue / 100
-        }
-        return 0
-    }
-
     // Create custom Summary section
     const createCustomSummary = () => {
       // Check if we already created it
@@ -136,7 +117,8 @@ const OrderCustomCableDisplay = () => {
       const itemPriceMap = new Map<string, number>() // Map item ID to price
       
       customItems.forEach((item: any) => {
-        const price = getCustomCablePrice(item)
+        const metadata = item.metadata || {}
+        const price = parseFloat(metadata.unitCustomCablePriceDollars || '0')
         const quantity = item.quantity || 1
         itemSubtotal += price * quantity
         itemPriceMap.set(item.id, price)
@@ -216,7 +198,7 @@ const OrderCustomCableDisplay = () => {
             ${items.map((item: any) => {
               const metadata = item.metadata || {}
               const title = metadata.customTitle || item.variant?.title || "Custom Cable"
-              const price = getCustomCablePrice(item)
+              const price = parseFloat(metadata.unitCustomCablePriceDollars || '0')
               const quantity = item.quantity || 1
               const variantTitle = item.variant?.title || "Default option value"
               
@@ -277,48 +259,37 @@ const OrderCustomCableDisplay = () => {
       `
     }
 
-    // Hide default Payments section and create custom one
-    const hideDefaultPayments = () => {
+    // Update Unfulfilled Items section prices
+    const updateUnfulfilledItems = () => {
+      // Find "Unfulfilled Items" section by heading text
       const headings = Array.from(document.querySelectorAll('h2, h3, h4, div[class*="Heading"]'))
+      let unfulfilledSection: HTMLElement | null = null
+      
       for (const heading of headings) {
-        if (heading.textContent?.trim().toLowerCase() === 'payments') {
-          let current: Element | null = heading.parentElement
-          let depth = 0
-          const maxDepth = 5
-          
-          while (current && depth < maxDepth) {
-            const currentText = current.textContent || ''
-            if (currentText.includes('Total paid') || currentText.includes('paid by customer') || 
-                current.querySelector('[class*="Payment"]') || 
-                current.querySelector('[data-testid*="payment"]')) {
-              (current as HTMLElement).style.display = 'none'
-              (current as HTMLElement).setAttribute('data-hidden-by-custom-cable-payments', 'true')
-              return
-            }
-            current = current.parentElement
-            depth++
+        const text = heading.textContent?.trim().toLowerCase() || ''
+        if (text.includes('unfulfilled') || text.includes('fulfillment')) {
+          // Walk up to find the container section
+          let container = heading.closest('div[class*="flex"], div[class*="grid"], section, div') as HTMLElement
+          if (container) {
+            unfulfilledSection = container
+            break
           }
         }
       }
-    }
 
-    const createCustomPayments = () => {
-      if (document.getElementById('custom-cable-payments')) return
+      if (!unfulfilledSection) return
 
-      // Calculate correct total
-      let totalAmount = 0
+      // Create a map of item IDs to correct prices
+      const priceMap = new Map<string, number>()
       customItems.forEach((item: any) => {
-        const price = getCustomCablePrice(item)
-        const quantity = item.quantity || 1
-        totalAmount += price * quantity
+        const metadata = item.metadata || {}
+        const price = parseFloat(metadata.unitCustomCablePriceDollars || '0')
+        if (price > 0) {
+          priceMap.set(item.id, price)
+        }
       })
 
-      const shippingTotal = (orderData.shipping_total || 0) / 100
-      const taxTotal = (orderData.tax_total || 0) / 100
-      const discountTotal = (orderData.discount_total || 0) / 100
-      const orderTotal = totalAmount + shippingTotal + taxTotal - discountTotal
-      const paidTotal = (orderData.paid_total || 0) / 100
-
+      // Find all price elements in the unfulfilled section that show $0.00
       const formatPrice = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
@@ -327,141 +298,69 @@ const OrderCustomCableDisplay = () => {
         }).format(amount)
       }
 
-      const hiddenPayments = document.querySelector('[data-hidden-by-custom-cable-payments="true"]')
-      const insertionPoint = hiddenPayments?.parentElement || document.body
-      
-      const customPayments = document.createElement('div')
-      customPayments.id = 'custom-cable-payments'
-      customPayments.setAttribute('data-custom-cable-payments', 'true')
-      customPayments.innerHTML = `
-        <div style="background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; border: 1px solid #e5e7eb;">
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #111827; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb;">Payments</h2>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span style="color: #6b7280;">Total paid by customer</span>
-            <span style="color: #111827; font-weight: 500;">${formatPrice(orderTotal)} USD</span>
-          </div>
-          ${paidTotal > 0 ? `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-              <span style="color: #6b7280;">Paid Total</span>
-              <span style="color: #10b981; font-weight: 500;">${formatPrice(paidTotal)} USD</span>
-            </div>
-          ` : ''}
-        </div>
-      `
-
-      if (hiddenPayments?.parentElement) {
-        hiddenPayments.parentElement.insertBefore(customPayments, hiddenPayments)
-      } else {
-        insertionPoint.insertBefore(customPayments, insertionPoint.firstChild)
-      }
-    }
-
-    // Hide default Unfulfilled Items section and create custom one
-    const hideDefaultUnfulfilledItems = () => {
-      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div[class*="Heading"]'))
-      for (const heading of headings) {
-        const headingText = heading.textContent?.trim().toLowerCase() || ''
-        if (headingText.includes('unfulfilled') || headingText.includes('fulfillment')) {
-          let current: Element | null = heading.parentElement
-          let depth = 0
-          const maxDepth = 5
-          
-          while (current && depth < maxDepth) {
-            const currentText = current.textContent || ''
-            if (currentText.includes('Custom Cable') || 
-                current.querySelector('[class*="Fulfillment"]') ||
-                current.querySelector('[class*="Unfulfilled"]')) {
-              (current as HTMLElement).style.display = 'none'
-              (current as HTMLElement).setAttribute('data-hidden-by-custom-cable-fulfillment', 'true')
-              return
-            }
-            current = current.parentElement
-            depth++
+      // More aggressive search: look for any $0.00 prices near "Custom Cable" text
+      // Strategy: Find all text nodes and update prices in the same container
+      const walkNodes = (node: Node, callback: (node: Node) => void) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          callback(node)
+        } else {
+          for (let child = node.firstChild; child; child = child.nextSibling) {
+            walkNodes(child, callback)
           }
         }
       }
-    }
 
-    const createCustomUnfulfilledItems = () => {
-      if (document.getElementById('custom-cable-unfulfilled')) return
-
-      const formatPrice = (amount: number) => {
-        return new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          minimumFractionDigits: 2,
-        }).format(amount)
-      }
-
-      const hiddenFulfillment = document.querySelector('[data-hidden-by-custom-cable-fulfillment="true"]')
-      const insertionPoint = hiddenFulfillment?.parentElement || document.body
-      
-      const customUnfulfilled = document.createElement('div')
-      customUnfulfilled.id = 'custom-cable-unfulfilled'
-      customUnfulfilled.setAttribute('data-custom-cable-unfulfilled', 'true')
-      customUnfulfilled.innerHTML = `
-        <div style="background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; border: 1px solid #e5e7eb;">
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #111827; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb;">Unfulfilled Items</h2>
-          ${customItems.map((item: any) => {
-            const metadata = item.metadata || {}
-            const title = metadata.customTitle || item.variant?.title || "Custom Cable"
-            const price = getCustomCablePrice(item)
-            const quantity = item.quantity || 1
-            return `
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-                <div style="flex: 1;">
-                  <div style="font-weight: 500; color: #111827;">${title}</div>
-                  <div style="font-size: 14px; color: #6b7280;">Quantity: ${quantity}</div>
-                </div>
-                <div style="margin-left: 16px; text-align: right;">
-                  <div style="color: #111827; font-weight: 500;">${formatPrice(price)}</div>
-                </div>
-              </div>
-            `
-          }).join('')}
-        </div>
-      `
-
-      if (hiddenFulfillment?.parentElement) {
-        hiddenFulfillment.parentElement.insertBefore(customUnfulfilled, hiddenFulfillment)
-      } else {
-        insertionPoint.insertBefore(customUnfulfilled, insertionPoint.firstChild)
-      }
-    }
-
-    // Hide default Activity section and create custom one
-    const hideDefaultActivity = () => {
-      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div[class*="Heading"]'))
-      for (const heading of headings) {
-        const headingText = heading.textContent?.trim().toLowerCase() || ''
-        if (headingText === 'activity') {
-          let current: Element | null = heading.parentElement
-          let depth = 0
-          const maxDepth = 5
-          
-          while (current && depth < maxDepth) {
-            const currentText = current.textContent || ''
-            if (currentText.includes('Order placed') || 
-                current.querySelector('[class*="Activity"]') ||
-                current.querySelector('[data-testid*="activity"]')) {
-              (current as HTMLElement).style.display = 'none'
-              (current as HTMLElement).setAttribute('data-hidden-by-custom-cable-activity', 'true')
-              return
+      // Find all $0.00 prices and update them if they're in a container with "Custom Cable"
+      const allElements = unfulfilledSection.querySelectorAll('*')
+      allElements.forEach((el) => {
+        const text = el.textContent || ''
+        // Check if this element or its parent contains "Custom Cable"
+        const hasCustomCable = text.includes('Custom Cable') || 
+                              el.closest('[class*="item"], [class*="product"], tr, div')?.textContent?.includes('Custom Cable')
+        
+        if (hasCustomCable || /\$0\.00/.test(text)) {
+          // Look for $0.00 pattern in text nodes
+          walkNodes(el, (textNode) => {
+            if (textNode.textContent && /\$0\.00/.test(textNode.textContent) && priceMap.size > 0) {
+              const correctPrice = Array.from(priceMap.values())[0]
+              const formattedPrice = formatPrice(correctPrice)
+              // Only update if it's exactly $0.00 (not part of a larger string like "$0.00 USD")
+              if (textNode.textContent.trim() === '$0.00' || textNode.textContent.includes('$0.00')) {
+                textNode.textContent = textNode.textContent.replace(/\$0\.00/g, formattedPrice)
+                // Mark parent element
+                if (textNode.parentElement) {
+                  textNode.parentElement.setAttribute('data-custom-price-updated', 'true')
+                }
+              }
             }
-            current = current.parentElement
-            depth++
+          })
+        }
+      })
+    }
+
+    // Update Activity section
+    const updateActivitySection = () => {
+      // Find "Activity" section by heading
+      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div[class*="Heading"]'))
+      let activitySection: HTMLElement | null = null
+      
+      for (const heading of headings) {
+        if (heading.textContent?.trim().toLowerCase() === 'activity') {
+          const container = heading.closest('div, section') as HTMLElement
+          if (container) {
+            activitySection = container
+            break
           }
         }
       }
-    }
 
-    const createCustomActivity = () => {
-      if (document.getElementById('custom-cable-activity')) return
+      if (!activitySection) return
 
       // Calculate correct order total
       let totalAmount = 0
       customItems.forEach((item: any) => {
-        const price = getCustomCablePrice(item)
+        const metadata = item.metadata || {}
+        const price = parseFloat(metadata.unitCustomCablePriceDollars || '0')
         const quantity = item.quantity || 1
         totalAmount += price * quantity
       })
@@ -479,70 +378,67 @@ const OrderCustomCableDisplay = () => {
         }).format(amount)
       }
 
-      // Get order created date
-      const orderDate = orderData.created_at ? new Date(orderData.created_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }) : 'N/A'
-
-      const hiddenActivity = document.querySelector('[data-hidden-by-custom-cable-activity="true"]')
-      const insertionPoint = hiddenActivity?.parentElement || document.body
-      
-      const customActivity = document.createElement('div')
-      customActivity.id = 'custom-cable-activity'
-      customActivity.setAttribute('data-custom-cable-activity', 'true')
-      customActivity.innerHTML = `
-        <div style="background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; border: 1px solid #e5e7eb;">
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #111827; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb;">Activity</h2>
-          <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <div style="font-weight: 500; color: #111827;">Order placed</div>
-                <div style="font-size: 12px; color: #6b7280;">${orderDate}</div>
-              </div>
-              <div style="color: #111827; font-weight: 500;">${formatPrice(finalTotal)} USD</div>
-            </div>
-          </div>
-        </div>
-      `
-
-      if (hiddenActivity?.parentElement) {
-        hiddenActivity.parentElement.insertBefore(customActivity, hiddenActivity)
-      } else {
-        insertionPoint.insertBefore(customActivity, insertionPoint.firstChild)
-      }
+      // Find and update "Order placed" activity price
+      const allElements = activitySection.querySelectorAll('*')
+      allElements.forEach((el) => {
+        const text = el.textContent || ''
+        // Look for "Order placed" text
+        if (text.includes('Order placed')) {
+          // Find price nearby (usually in the same or sibling element)
+          const pricePattern = /\$[\d,]+\.?\d*\s*USD/
+          if (pricePattern.test(text)) {
+            // Update the price in this element's text
+            const updatedText = text.replace(pricePattern, `${formatPrice(finalTotal)} USD`)
+            if (el.textContent !== updatedText) {
+              el.textContent = updatedText
+              el.setAttribute('data-custom-price-updated', 'true')
+            }
+          } else {
+            // Price might be in a child or sibling element
+            const children = el.querySelectorAll('span, div, p')
+            children.forEach((child) => {
+              const childText = child.textContent || ''
+              if (pricePattern.test(childText) && childText.includes('$0')) {
+                child.textContent = childText.replace(pricePattern, `${formatPrice(finalTotal)} USD`)
+                child.setAttribute('data-custom-price-updated', 'true')
+              }
+            })
+          }
+        }
+      })
     }
+
+    // Use MutationObserver to watch for DOM changes and update prices
+    const observer = new MutationObserver(() => {
+      updateUnfulfilledItems()
+      updateActivitySection()
+    })
+
+    // Start observing the document for changes
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    })
 
     // Run initial updates after a delay to ensure DOM is ready
     const timer = setTimeout(() => {
       hideDefaultSummary()
       createCustomSummary()
-      hideDefaultPayments()
-      createCustomPayments()
-      hideDefaultUnfulfilledItems()
-      createCustomUnfulfilledItems()
-      hideDefaultActivity()
-      createCustomActivity()
+      updateUnfulfilledItems()
+      updateActivitySection()
       
       // Run updates again after a longer delay to catch late-loading content
       setTimeout(() => {
-        hideDefaultSummary()
-        createCustomSummary()
-        hideDefaultPayments()
-        createCustomPayments()
-        hideDefaultUnfulfilledItems()
-        createCustomUnfulfilledItems()
-        hideDefaultActivity()
-        createCustomActivity()
+        updateUnfulfilledItems()
+        updateActivitySection()
       }, 1500)
     }, 500)
 
     return () => {
       clearTimeout(timer)
-      // Cleanup: show default sections again and remove custom ones
+      observer.disconnect()
+      // Cleanup: show default summary again and remove custom one
       const hiddenSummary = document.querySelector('[data-hidden-by-custom-cable="true"]')
       if (hiddenSummary) {
         (hiddenSummary as HTMLElement).style.display = ''
@@ -551,33 +447,6 @@ const OrderCustomCableDisplay = () => {
       const customSummary = document.getElementById('custom-cable-summary')
       if (customSummary) {
         customSummary.remove()
-      }
-      const hiddenPayments = document.querySelector('[data-hidden-by-custom-cable-payments="true"]')
-      if (hiddenPayments) {
-        (hiddenPayments as HTMLElement).style.display = ''
-        hiddenPayments.removeAttribute('data-hidden-by-custom-cable-payments')
-      }
-      const customPayments = document.getElementById('custom-cable-payments')
-      if (customPayments) {
-        customPayments.remove()
-      }
-      const hiddenFulfillment = document.querySelector('[data-hidden-by-custom-cable-fulfillment="true"]')
-      if (hiddenFulfillment) {
-        (hiddenFulfillment as HTMLElement).style.display = ''
-        hiddenFulfillment.removeAttribute('data-hidden-by-custom-cable-fulfillment')
-      }
-      const customUnfulfilled = document.getElementById('custom-cable-unfulfilled')
-      if (customUnfulfilled) {
-        customUnfulfilled.remove()
-      }
-      const hiddenActivity = document.querySelector('[data-hidden-by-custom-cable-activity="true"]')
-      if (hiddenActivity) {
-        (hiddenActivity as HTMLElement).style.display = ''
-        hiddenActivity.removeAttribute('data-hidden-by-custom-cable-activity')
-      }
-      const customActivity = document.getElementById('custom-cable-activity')
-      if (customActivity) {
-        customActivity.remove()
       }
     }
   }, [orderData, customItems])
