@@ -72,10 +72,7 @@ module.exports = defineConfig({
             resolve: "@medusajs/medusa/file-local",
             id: "local",
             options: {
-              // Use external directory in production (set via MEDUSA_STATIC_DIR env var)
-              // In production: /var/www/medusa-uploads (set in .medusa/server/.env)
-              // In development: static (relative path, works with yarn dev)
-              upload_dir: process.env.MEDUSA_STATIC_DIR || process.env.STATIC_DIR || "static",
+              upload_dir: "static",
               backend_url: getBackendUrl(),
             },
           },
