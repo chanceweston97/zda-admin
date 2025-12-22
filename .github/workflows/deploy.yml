@@ -12,18 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Upload code to EC2
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          source: "."
-          target: ${{ secrets.APP_PATH }}
-          strip_components: 0
-          rm: false
-
-      - name: Install, build, and restart on EC2
+      - name: Deploy code and build on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -36,6 +25,22 @@ jobs:
             MEDIA_DIR="/var/medusa-media"
 
             cd "$APP_PATH"
+
+            echo "== Pull latest code from git =="
+            # Pull latest code from the repository
+            if [ -d ".git" ]; then
+              git fetch origin
+              git reset --hard origin/main
+              git clean -fd
+              echo "✓ Code pulled from git successfully"
+            else
+              echo "⚠️  Not a git repository - code should be uploaded via SCP in previous step"
+            fi
+
+            echo "== Verify code =="
+            echo "Current directory: $(pwd)"
+            echo "Latest commit (if git):"
+            git log -1 --oneline 2>/dev/null || echo "Not available"
 
             echo "== Ensure media directory exists =="
             sudo mkdir -p "$MEDIA_DIR"
