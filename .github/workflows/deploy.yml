@@ -80,9 +80,9 @@ jobs:
             MEDUSA_BACKEND_URL=https://admin.zdacomm.com
             MEDUSA_ADMIN_URL=https://admin.zdacomm.com
             DATABASE_URL=postgresql://medusa123:medusa123@127.0.0.1:5432/medusa123
-            ADMIN_CORS=https://admin.zdacomm.com
-            STORE_CORS=https://store.zdacomm.com
-            AUTH_CORS=https://admin.zdacomm.com
+            ADMIN_CORS=https://admin.zdacomm.com,http://localhost:8000
+            STORE_CORS=https://store.zdacomm.com,http://localhost:8000
+            AUTH_CORS=https://admin.zdacomm.com,http://localhost:8000
             EOF
 
             echo "== Run DB migrations =="
