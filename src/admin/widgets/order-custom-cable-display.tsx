@@ -68,6 +68,7 @@ const OrderCustomCableDisplay = () => {
         const metadata = item.metadata || {}
         // Get price from metadata.price (in cents) or fallback to other fields
         if (metadata.price) {
+          console.log('metadata.price', metadata.price)
           // Price is in cents, convert to dollars
           return (typeof metadata.price === 'number' ? metadata.price : parseFloat(String(metadata.price))) / 100
         } else if (metadata.unitCustomCablePriceDollars) {
@@ -481,7 +482,10 @@ const OrderCustomCableDisplay = () => {
           const pricePattern = /\$[\d,]+\.?\d*\s*USD/
           if (pricePattern.test(text)) {
             // Update the price in this element's text
-            const updatedText = text.replace(pricePattern, `${formatPrice(finalTotal)} USD`)
+            const metaPrice = typeof item.metadata.price === 'number'
+              ? formatPrice(item.metadata.price)
+              : item.metadata.price
+            const updatedText = text.replace(pricePattern, `${metaPrice} USD`)
             if (el.textContent !== updatedText) {
               el.textContent = updatedText
               el.setAttribute('data-custom-price-updated', 'true')
