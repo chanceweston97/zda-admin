@@ -43,6 +43,24 @@ jobs:
             echo "Code files present:"
             ls -la | head -15
 
+            echo "== Clean up deleted files =="
+            # Remove files that were deleted from the repo but still exist on server
+            # SCP with rm:false doesn't delete files, so we need to clean them up explicitly
+            # Remove documentation files that are no longer in the repository
+            rm -f \
+              SETUP_EXTERNAL_UPLOADS.md \
+              EXTERNAL_UPLOADS_QUICK_START.md \
+              HOW_IT_WORKS.md \
+              CMS_BACKEND_SETUP.md \
+              CMS_QUICK_START.md \
+              DEPLOYMENT_FIX.md \
+              VERIFY_BUILD.md \
+              2>/dev/null || true
+            # Also remove any other .md files in root that aren't README.md
+            # (keeps README.md but removes other docs that might have been deleted)
+            find . -maxdepth 1 -name "*.md" ! -name "README.md" -type f -delete 2>/dev/null || true
+            echo "✓ Cleanup complete - removed old documentation files"
+
             echo "== Ensure media directory exists =="
             sudo mkdir -p "$MEDIA_DIR"
             sudo chown -R ubuntu:ubuntu "$MEDIA_DIR"
