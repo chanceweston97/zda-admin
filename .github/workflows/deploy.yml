@@ -84,8 +84,6 @@ jobs:
 
             echo "== Build Medusa (this recreates .medusa/server) =="
             export NODE_ENV=production
-            export MEDUSA_BACKEND_URL=https://admin.zdacomm.com
-            export MEDUSA_ADMIN_URL=https://admin.zdacomm.com
             npx medusa build
 
             echo "== CRITICAL: Fix static directory AFTER build =="
