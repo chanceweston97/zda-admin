@@ -68,7 +68,7 @@ jobs:
 
             echo "== Install dependencies =="
             echo "Yarn path: $(which yarn || echo 'not found')"
-            yarn install --production=false
+            yarn install
 
             echo "== Build Medusa =="
             export NODE_ENV=production
