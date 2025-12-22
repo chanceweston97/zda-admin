@@ -243,21 +243,21 @@ export default async function orderCreatedHandler({
             // Price in cents
             correctPrice = typeof metadata.unitCustomCablePrice === 'number' 
               ? metadata.unitCustomCablePrice 
-              : parseInt(metadata.unitCustomCablePrice) || 0;
+              : parseInt(String(metadata.unitCustomCablePrice)) || 0;
           } else if (metadata.unitCustomCablePriceDollars) {
             // Price in dollars, convert to cents
             const priceInDollars = typeof metadata.unitCustomCablePriceDollars === 'number'
               ? metadata.unitCustomCablePriceDollars
-              : parseFloat(metadata.unitCustomCablePriceDollars) || 0;
+              : parseFloat(String(metadata.unitCustomCablePriceDollars)) || 0;
             correctPrice = Math.round(priceInDollars * 100);
           } else if (metadata.unitPriceCents) {
             correctPrice = typeof metadata.unitPriceCents === 'number'
               ? metadata.unitPriceCents
-              : parseInt(metadata.unitPriceCents) || 0;
+              : parseInt(String(metadata.unitPriceCents)) || 0;
           } else if (metadata.unitPriceDollars) {
             const priceInDollars = typeof metadata.unitPriceDollars === 'number'
               ? metadata.unitPriceDollars
-              : parseFloat(metadata.unitPriceDollars) || 0;
+              : parseFloat(String(metadata.unitPriceDollars)) || 0;
             correctPrice = Math.round(priceInDollars * 100);
           }
 
@@ -279,7 +279,7 @@ export default async function orderCreatedHandler({
       }
 
       // Update line items if we found any custom cables with incorrect prices
-      if (lineItemUpdates.length > 0) {
+      if (lineItemUpdates.length > 0 && order.items) {
         console.log(`🔧 Fixing ${lineItemUpdates.length} custom cable line item(s) with correct prices`);
         
         // Calculate new order totals based on correct custom cable prices from metadata
@@ -300,15 +300,15 @@ export default async function orderCreatedHandler({
           return sum + (item.total || 0);
         }, 0);
         
-        const shippingTotal = order.shipping_total || 0;
-        const taxTotal = order.tax_total || 0;
-        const discountTotal = order.discount_total || 0;
+        const shippingTotal = (order.shipping_total as number) || 0;
+        const taxTotal = (order.tax_total as number) || 0;
+        const discountTotal = (order.discount_total as number) || 0;
         const newTotal = newSubtotal + shippingTotal + taxTotal - discountTotal;
 
         console.log(`🔧 Calculated new order totals:`, {
           newSubtotal: newSubtotal / 100,
           newTotal: newTotal / 100,
-          oldTotal: (order.total || 0) / 100,
+          oldTotal: ((order.total as number) || 0) / 100,
         });
 
         // NOTE: In Medusa v2, line items' unit_price is immutable and comes from the variant
@@ -333,31 +333,21 @@ export default async function orderCreatedHandler({
             }, {} as Record<string, number>),
           };
           
-          // Try to update order totals and metadata
-          // In Medusa v2, we can update order totals even if line items are immutable
+          // Try to update order metadata
+          // Note: In Medusa v2, order totals (subtotal, total) are typically calculated automatically
+          // and may not be directly updatable. We store the correct values in metadata instead.
           try {
             await orderModuleService.updateOrders(orderId, {
-              subtotal: newSubtotal,
-              total: newTotal,
               metadata: updatedMetadata,
             });
             
-            console.log(`✅ Updated order totals and metadata with correct custom cable prices`);
-            console.log(`✅ Order total updated from $${((order.total || 0) / 100).toFixed(2)} to $${(newTotal / 100).toFixed(2)}`);
-          } catch (updateError: any) {
-            // If updating totals fails, at least try to update metadata
-            console.warn(`⚠️ Could not update order totals (may be calculated automatically):`, updateError.message);
-            
-            try {
-              await orderModuleService.updateOrders(orderId, {
-                metadata: updatedMetadata,
-              });
-              console.log(`✅ Updated order metadata with correct custom cable prices`);
-              console.log(`ℹ️ Note: Order totals may need to be manually adjusted in admin`);
-            } catch (metadataError: any) {
-              console.warn(`⚠️ Could not update order metadata:`, metadataError.message);
-              console.warn(`⚠️ Custom cable prices are stored in line item metadata - admin widget will handle display`);
-            }
+            console.log(`✅ Updated order metadata with correct custom cable prices`);
+            console.log(`✅ Correct order total (stored in metadata): $${(newTotal / 100).toFixed(2)} (was $${(((order.total as number) || 0) / 100).toFixed(2)})`);
+            console.log(`ℹ️ Note: Order totals in Medusa may show calculated values from line items`);
+            console.log(`ℹ️ The admin widget will use metadata prices for correct display`);
+          } catch (metadataError: any) {
+            console.warn(`⚠️ Could not update order metadata:`, metadataError.message);
+            console.warn(`⚠️ Custom cable prices are stored in line item metadata - admin widget will handle display`);
           }
         } catch (updateError: any) {
           console.error(`❌ Error updating order with custom cable prices:`, updateError.message);
