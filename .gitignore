@@ -1,22 +1,25 @@
+# build output
 /dist
+/build
+.cache
+coverage
+
+# env
 .env
 .DS_Store
-/uploads
-/static
+.idea
+
+# dependencies
 /node_modules
 yarn-error.log
 
-.idea
-
-coverage
-
-!src/**
-
-./tsconfig.tsbuildinfo
+# medusa runtime
+/static
+/uploads
+.medusa
 medusa-db.sql
-build
-.cache
 
+# yarn berry
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
@@ -24,4 +27,8 @@ build
 !.yarn/sdks
 !.yarn/versions
 
-.medusa
+# typescript
+*.tsbuildinfo
+
+# source (keep)
+!src/**
