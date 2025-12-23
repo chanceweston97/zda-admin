@@ -105,22 +105,21 @@ export async function POST(
         </div>
       `;
 
-      const fromDomain = (process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER || "").split("@")[1];
-      const submitterDomain = email.trim().split("@")[1];
-      const replyToAddress = submitterDomain === fromDomain 
-        ? email.trim() 
-        : (process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER);
+      // Send to sales@zdacomm.com, with customer email as replyTo
+      // This allows sales to receive the email and reply directly to the customer
+      const salesEmail = process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER || "sales@zdacomm.com";
+      const customerEmail = email.trim();
 
       const emailResult = await sendEmail({
-        to: adminEmail,
+        to: salesEmail,
         subject: emailSubject,
         html: emailHtml,
-        replyTo: replyToAddress,
+        replyTo: customerEmail,
       });
 
       if (emailResult && emailResult.accepted && emailResult.accepted.length > 0) {
         emailSent = true;
-        console.log(`✅ Quote request email sent successfully to: ${adminEmail}`);
+        console.log(`✅ Quote request email sent successfully to: ${salesEmail} (replyTo: ${customerEmail})`);
       } else if (emailResult && emailResult.rejected && emailResult.rejected.length > 0) {
         emailError = `Email rejected: ${emailResult.rejected.join(", ")}`;
       } else if (emailResult) {
